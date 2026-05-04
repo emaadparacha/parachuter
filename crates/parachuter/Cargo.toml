@@ -1,0 +1,44 @@
+[package]
+name = "parachuter"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+# This package ships both the `parachuter` library (for downstream consumers
+# of the protocol / chunker / reassembler) and the `parachuter` binary (the
+# multi-mode CLI). Cargo auto-discovers `src/lib.rs` as the library and
+# `src/main.rs` as the binary. They compile as separate crates; the binary
+# uses the library via `parachuter::...`.
+
+[dependencies]
+# Library deps (used by both lib and bin).
+tracing = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+rusqlite = { workspace = true }
+chrono = { workspace = true }
+crc32fast = { workspace = true }
+notify = { workspace = true }
+walkdir = { workspace = true }
+tokio = { workspace = true }
+
+# Bin-only deps. Cargo links these into the binary; they are part of the
+# library's transitive deps too, which costs a little extra compile time for
+# downstream library consumers but keeps the package layout simple.
+clap = { workspace = true }
+anyhow = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"

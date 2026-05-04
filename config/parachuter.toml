@@ -1,0 +1,112 @@
+# Sample parachuter configuration.
+#
+# Anything here can be re-tuned at runtime via `parachuter ctl` without
+# editing this file; the file is the persistent baseline that survives
+# restarts.
+
+[sender]
+bind_ip = "0.0.0.0"
+bind_port = 34646
+chunk_size = 16192               # datagram size including 32-byte header
+active_link = "pilot"
+ledger_path = "/var/lib/parachuter/ledger.sqlite"
+
+# Walked when the sender is in `auto` state.
+priority_dirs = [
+    "/data/parachuter/queue/sql_status",
+    "/data/parachuter/queue/bsc",
+    "/data/parachuter/queue/rsc",
+    "/data/parachuter/queue/fsc1",
+    "/data/parachuter/queue/fsc2",
+    "/data/parachuter/queue/lossy",
+    "/data/parachuter/queue/oba",
+    "/data/parachuter/queue/dark",
+    "/data/parachuter/queue/flat",
+    "/data/parachuter/queue/bias",
+    "/data/parachuter/queue/bitstripped",
+    "/data/parachuter/queue/science",
+    "/data/parachuter/queue/gopro",
+]
+
+# Walked when the sender is in `debug` state. Anything here is downlinked
+# *instead of* `priority_dirs`; if this list is empty, the debug state does
+# no auto-ingest at all (manual `submit` / `enqueue` still work).
+priority_dirs_debug = [
+    # "/data/parachuter/queue/debug",
+]
+
+# Optional extension filters. Both apply only to the auto-scanner; explicit
+# `parachuter ctl submit --path …` always honours the caller. Entries are
+# matched case-insensitively against the file's tail and may include or omit
+# a leading dot, and may be compound (e.g. "fits.bz2").
+#
+# Precedence:
+#   * skip wins on clashes
+#   * both empty           → downlink everything
+#   * only skip non-empty  → downlink everything except those extensions
+#   * only include set     → downlink only those extensions
+#   * both set             → downlink (include - skip)
+include_extensions = [
+    # "fits", "fits.bz2",
+]
+skip_extensions = [
+    # "log", "tmp",
+]
+
+control_socket = "/run/parachuter/sender.sock"
+initial_state = "auto"
+images_per_dark = 50
+images_per_flat = 50
+images_per_bias = 50
+recheck_period_secs = 100
+status_dump_period_secs = 21600  # 6h
+
+[receiver]
+bind_ip = "0.0.0.0"
+bind_port = 41410
+holding_dir = "/var/lib/parachuter/holding"
+final_dir = "/var/lib/parachuter/downloads"
+csv_dir = "/var/lib/parachuter/csv"
+control_socket = "/run/parachuter/receiver.sock"
+
+[cleaner]
+holding_dir = "/var/lib/parachuter/holding"
+final_dir = "/var/lib/parachuter/downloads"
+csv_dir = "/var/lib/parachuter/csv"
+sender_control_socket = "/run/parachuter/sender.sock"
+active_link = "pilot"
+state_path = "/var/lib/parachuter/cleaner-state.json"
+run_period_secs = 60
+checker_period_secs = 7200
+dedup_ttl_secs = 300
+control_socket = "/run/parachuter/cleaner.sock"
+
+[cleaner.links.pilot]
+max_in_flight = 8
+min_period_ms = 500
+
+[cleaner.links.los]
+max_in_flight = 4
+min_period_ms = 1000
+
+[cleaner.links.tdrss]
+max_in_flight = 1
+min_period_ms = 5000
+
+[links.pilot]
+ip = "192.168.98.24"
+port = 41410
+max_kbps = 1000
+note = "Pilot link"
+
+[links.los]
+ip = "239.255.0.1"
+port = 41410
+max_kbps = 250
+note = "LOS multicast"
+
+[links.tdrss]
+ip = "239.255.0.2"
+port = 41410
+max_kbps = 30
+note = "TDRSS multicast"

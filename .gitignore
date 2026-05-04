@@ -1,0 +1,19 @@
+/target
+**/*.rs.bk
+Cargo.lock
+*.swp
+*.swo
+.DS_Store
+
+# parachuter runtime state (never commit live data)
+/var/lib/parachuter/
+/run/parachuter/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.parmanifest
+*.parmanifest.tmp
+*.incoming
+cleaner-state.json
+cleaner-state.json.tmp
+files_sent_list_*.csv
