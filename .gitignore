@@ -17,3 +17,7 @@ Cargo.lock
 cleaner-state.json
 cleaner-state.json.tmp
 files_sent_list_*.csv
+
+# demo build output
+demo/target/
+demo/parachuter-demo-out/

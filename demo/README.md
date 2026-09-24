@@ -1,0 +1,51 @@
+# 🪂 parachuter demo
+
+A one-command, laptop-only demo of the `parachuter` crate. It downlinks a file
+over UDP on `127.0.0.1` through a deliberately lossy, rate-limited "radio
+link", then recovers every missing chunk with targeted retransmits until the
+file lands **byte-for-byte identical**.
+
+```
+  flight side (main thread)               ground side (receiver thread)
+  Chunker -> RateLimiter -> lossy link -> UdpReceiver -> Reassembler
+      ^                                                       |
+      +-------- missing_ranges()  (the cleaner's job) --------+
+```
+
+## Run it
+
+```bash
+cd demo
+cargo run --release
+```
+
+With no arguments it generates a 3 MiB sample file, drops **20%** of packets,
+and caps the link at **8000 kbps**. Each retransmit pass prints a chunk map
+(█ received, ▒ partly missing, ░ missing) so you can watch the gaps close.
+
+## Knobs for a live audience
+
+| Flag | Default | Try |
+|---|---|---|
+| `--file PATH` | generated sample | any photo, PDF or FITS file on your laptop |
+| `--loss PCT` | `20` | `40` for a rough day, `0` for a perfect link |
+| `--kbps N` | `8000` | `2000` to slow it down so people can watch |
+| `--chunk-size BYTES` | `4096` | `1400` (Ethernet-safe) for many more chunks |
+| `--port N` | `41410` | change if the port is taken |
+| `--seed N` | fixed | change for a different loss pattern |
+
+```bash
+cargo run --release -- --file ~/Pictures/nebula.jpg --loss 35 --kbps 4000
+```
+
+The received file lands in `parachuter-demo-out/downloads/`, so you can open it
+afterwards to prove it survived.
+
+## Using the local copy instead of crates.io
+
+`Cargo.toml` depends on the published `parachuter = "0.1"`. To run against the
+source in this repo (before publishing, or while changing the crate), swap in:
+
+```toml
+parachuter = { path = "../crates/parachuter" }
+```

@@ -1,0 +1,18 @@
+[package]
+name = "parachuter-demo"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Local end-to-end demo of the parachuter crate: lossy UDP downlink on loopback with targeted retransmits."
+
+# Standalone project: keeps Cargo from treating this folder as part of the
+# parachuter workspace one level up.
+[workspace]
+
+[dependencies]
+# Pulls the published crate from crates.io.
+parachuter = "0.1"
+
+# Before the crate is published (or to test local changes), swap the line
+# above for this one:
+# parachuter = { path = "../crates/parachuter" }

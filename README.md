@@ -624,7 +624,7 @@ before exiting; the receiver and cleaner flush their state files.
 
 ## Design Notes
 
-See [`docs/DESIGN.md`](docs/DESIGN.md) for:
+See [`docs/DESIGN.md`](https://github.com/emaadparacha/parachuter/blob/main/docs/DESIGN.md) for:
 
 - 🪂 Wire protocol layout (full 32-byte header spec)
 - 📋 Manifest sidecar format
@@ -637,4 +637,4 @@ See [`docs/DESIGN.md`](docs/DESIGN.md) for:
 
 Copyright (c) 2026 Emaad Paracha
 
-This software is licensed for personal, academic, research, educational, and other non-commercial use only. Commercial use requires prior written permission from the copyright holder. See [LICENSE](LICENSE) for the full terms.
+This software is licensed for personal, academic, research, educational, and other non-commercial use only. Commercial use requires prior written permission from the copyright holder. See [LICENSE](https://github.com/emaadparacha/parachuter/blob/main/LICENSE) for the full terms.
