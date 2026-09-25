@@ -12,7 +12,7 @@ description = "Local end-to-end demo of the parachuter crate: lossy UDP downlink
 
 [dependencies]
 # Pulls the published crate from crates.io.
-parachuter = "0.1"
+parachuter = "0.2"
 
 # Before the crate is published (or to test local changes), swap the line
 # above for this one:

@@ -488,9 +488,12 @@ The UDP channel is purely unidirectional. The receiver never tells the
 sender "file complete". Partial files are repaired by the cleaner, and files
 lost whole are caught by [reconciliation](#reconciliation), which compares
 the sender's downlinked ledger with `final_dir`. Both rely on the cleaner
-reaching the sender's control socket, and a lost file is only noticed after
-the next snapshot lands and the grace period passes (up to roughly 6 h +
-6 h + 3 h in the worst case with default settings).
+reaching the sender's control socket, and a lost file is only noticed once
+a snapshot listing it has landed and a reconcile pass runs: about 12 h in the
+worst case with default settings (up to 6 h for the next snapshot, then up to
+6 h for the next pass, plus the snapshot's own downlink time). The 3 h grace
+period only delays files queued shortly before a pass, so it never extends
+that worst case.
 
 ### No multipath
 Only one link is active at a time. If the pilot link fails, the operator

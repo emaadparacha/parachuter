@@ -43,7 +43,7 @@ afterwards to prove it survived.
 
 ## Using the local copy instead of crates.io
 
-`Cargo.toml` depends on the published `parachuter = "0.1"`. To run against the
+`Cargo.toml` depends on the published `parachuter = "0.2"`. To run against the
 source in this repo (before publishing, or while changing the crate), swap in:
 
 ```toml
@@ -83,6 +83,23 @@ In the **CONTROL** pane (you):
 
 In the **LOSSY LINK** pane, type a number and press Enter to change the loss
 rate on the fly (try `50`, then `0`).
+
+### Showing a file lost whole, and recovered
+
+Type **`lostdemo`** in the CONTROL pane. It:
+
+1. blacks out the link (100% loss) and sends `lost_frame_0042.fits.bz2` into it,
+   so not one packet reaches the ground while the payload's ledger says it was sent;
+2. restores the link. The cleaner has no manifest for the file, so it cannot
+   know the file exists;
+3. waits for the sender's next ledger snapshot to come down. The reconciler
+   then logs `reconcile: lost whole, requested again` in the CLEANER pane, and
+   the file arrives about a minute after the blackout. Finish with `verify`.
+
+Timings are compressed for the demo: the ledger snapshot is written every
+30 s and reconciliation runs every 20 s with a 15 s grace period (6 h, 6 h
+and 3 h in production). Related helpers: `outage` / `restore`, `ledger` (the
+newest snapshot on the ground), `reconcile` (run a pass now) and `recstatus`.
 
 Everything lives in `/tmp/parachuter-demo`, including the generated
 `config.toml`. Edit it while the demo runs and the daemons pick up the change
