@@ -18,6 +18,8 @@
 //! * [`ledger`] — SQLite-backed table of files seen, sent, and acknowledged.
 //! * [`control`] — Unix-domain-socket control plane shared by every mode of
 //!   the `parachuter` binary.
+//! * [`reconcile`] — ground-side check of the sender's downlinked ledger
+//!   against the final directory, to catch files lost whole.
 //!
 //! See `docs/DESIGN.md` for the architecture overview.
 
@@ -32,6 +34,7 @@ pub mod ledger;
 pub mod proto;
 pub mod rate_limiter;
 pub mod reassembler;
+pub mod reconcile;
 pub mod transport;
 
 pub use error::{Error, Result};

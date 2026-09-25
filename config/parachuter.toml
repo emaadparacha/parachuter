@@ -59,25 +59,25 @@ images_per_dark = 50
 images_per_flat = 50
 images_per_bias = 50
 recheck_period_secs = 100
-status_dump_period_secs = 21600  # 6h
+status_dump_period_secs = 21600  # 6h: ledger snapshot, downlinked for reconciliation
 
 [receiver]
 bind_ip = "0.0.0.0"
 bind_port = 41410
 holding_dir = "/var/lib/parachuter/holding"
+# Files land at final_dir + their full payload path.
 final_dir = "/var/lib/parachuter/downloads"
-csv_dir = "/var/lib/parachuter/csv"
 control_socket = "/run/parachuter/receiver.sock"
 
 [cleaner]
 holding_dir = "/var/lib/parachuter/holding"
 final_dir = "/var/lib/parachuter/downloads"
-csv_dir = "/var/lib/parachuter/csv"
 sender_control_socket = "/run/parachuter/sender.sock"
 active_link = "pilot"
 state_path = "/var/lib/parachuter/cleaner-state.json"
 run_period_secs = 60
-checker_period_secs = 7200
+reconcile_period_secs = 21600  # 6h: compare the downlinked ledger with final_dir
+reconcile_grace_secs = 10800   # 3h: a file queued more recently is not called lost
 dedup_ttl_secs = 300
 control_socket = "/run/parachuter/cleaner.sock"
 

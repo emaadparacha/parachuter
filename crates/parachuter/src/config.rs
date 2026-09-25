@@ -117,10 +117,10 @@ pub struct ReceiverConfig {
     pub bind_port: u16,
     /// Holding directory for in-flight assemblies.
     pub holding_dir: PathBuf,
-    /// Final destination for completed files.
+    /// Final destination for completed files. Each file lands at this
+    /// directory plus its full payload path, e.g. `/data/qsc/m31.fits.bz2`
+    /// becomes `<final_dir>/data/qsc/m31.fits.bz2`.
     pub final_dir: PathBuf,
-    /// Where to put filenames matching `files_sent_*.csv*`.
-    pub csv_dir: PathBuf,
     /// Path to the Unix domain socket the receiver exposes for control.
     pub control_socket: PathBuf,
 }
@@ -130,10 +130,9 @@ pub struct ReceiverConfig {
 pub struct CleanerConfig {
     /// Holding directory for in-flight assemblies (must match the receiver).
     pub holding_dir: PathBuf,
-    /// Final directory.
+    /// Final directory (must match the receiver). The reconciler checks it
+    /// for every file in the sender's ledger snapshot.
     pub final_dir: PathBuf,
-    /// CSV directory.
-    pub csv_dir: PathBuf,
     /// Path to the sender's control socket; cleaner queries it for queue
     /// state to dedup requests.
     pub sender_control_socket: PathBuf,
@@ -146,12 +145,27 @@ pub struct CleanerConfig {
     pub state_path: PathBuf,
     /// How often the cleaner main loop runs.
     pub run_period_secs: u64,
-    /// How often the checker reconciles ledger CSVs against the final dir.
-    pub checker_period_secs: u64,
+    /// How often the reconciler compares the newest downlinked ledger
+    /// snapshot against `final_dir` and re-requests files lost whole.
+    /// Default 6 hours. (`checker_period_secs` is accepted as an old name.)
+    #[serde(default = "default_reconcile_period", alias = "checker_period_secs")]
+    pub reconcile_period_secs: u64,
+    /// How long after a file was queued before the reconciler may call it
+    /// lost. Default 3 hours.
+    #[serde(default = "default_reconcile_grace")]
+    pub reconcile_grace_secs: u64,
     /// How long an in-flight request stays in the dedup cache, in seconds.
     pub dedup_ttl_secs: u64,
     /// Path to the cleaner's own control socket.
     pub control_socket: PathBuf,
+}
+
+fn default_reconcile_period() -> u64 {
+    6 * 60 * 60
+}
+
+fn default_reconcile_grace() -> u64 {
+    3 * 60 * 60
 }
 
 /// Bandwidth budget for one uplink.
@@ -229,19 +243,18 @@ impl Default for Config {
                 bind_port: 41410,
                 holding_dir: PathBuf::from("/var/lib/parachuter/holding"),
                 final_dir: PathBuf::from("/var/lib/parachuter/downloads"),
-                csv_dir: PathBuf::from("/var/lib/parachuter/csv"),
                 control_socket: PathBuf::from("/run/parachuter/receiver.sock"),
             },
             cleaner: CleanerConfig {
                 holding_dir: PathBuf::from("/var/lib/parachuter/holding"),
                 final_dir: PathBuf::from("/var/lib/parachuter/downloads"),
-                csv_dir: PathBuf::from("/var/lib/parachuter/csv"),
                 sender_control_socket: PathBuf::from("/run/parachuter/sender.sock"),
                 links: cleaner_links,
                 active_link: "pilot".into(),
                 state_path: PathBuf::from("/var/lib/parachuter/cleaner-state.json"),
                 run_period_secs: 60,
-                checker_period_secs: 2 * 60 * 60,
+                reconcile_period_secs: default_reconcile_period(),
+                reconcile_grace_secs: default_reconcile_grace(),
                 dedup_ttl_secs: 300,
                 control_socket: PathBuf::from("/run/parachuter/cleaner.sock"),
             },
@@ -367,6 +380,20 @@ impl LiveConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn old_cleaner_keys_still_load() {
+        // A config written before reconciliation: `checker_period_secs` and
+        // `csv_dir` must not break it.
+        let mut c = Config::default();
+        c.cleaner.reconcile_period_secs = 1234;
+        let mut toml = c.to_toml().replace("reconcile_period_secs", "checker_period_secs");
+        toml = toml.replace("reconcile_grace_secs = 10800\n", "");
+        toml = toml.replace("[cleaner]\n", "[cleaner]\ncsv_dir = \"/var/lib/parachuter/csv\"\n");
+        let back: Config = toml::from_str(&toml).unwrap();
+        assert_eq!(back.cleaner.reconcile_period_secs, 1234);
+        assert_eq!(back.cleaner.reconcile_grace_secs, 3 * 60 * 60);
+    }
 
     #[test]
     fn default_is_valid() {

@@ -263,6 +263,10 @@ impl SenderRuntime {
     }
 
     fn push_full_file(&mut self, file_id: i64, file_name: String, total: u32, interrupt: bool) {
+        // Stamp the ledger so the ground reconciler knows when this send began.
+        if let Err(e) = self.ledger.mark_queued(file_id, Utc::now()) {
+            tracing::warn!(?e, file_id, "could not record queued_at");
+        }
         let item_data = WorkItem::Data {
             file_id,
             range: RequestedRange {

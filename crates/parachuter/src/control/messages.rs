@@ -64,6 +64,9 @@ pub enum Request {
     CleanerStatus,
     /// Tell the cleaner to immediately rescan the holding directory.
     CleanerRunNow,
+    /// Tell the cleaner to reconcile the newest ledger snapshot against the
+    /// final directory right now, instead of waiting for the next period.
+    CleanerReconcileNow,
 }
 
 /// One configurable knob; any field set to `Some` is applied, others left
@@ -219,4 +222,10 @@ pub struct CleanerStatus {
     pub recent_requests: u32,
     /// Active link.
     pub active_link: String,
+    /// Result of the most recent reconciliation pass, if any.
+    #[serde(default)]
+    pub last_reconcile: Option<crate::reconcile::ReconcileSummary>,
+    /// When the next scheduled reconciliation is due (unix seconds).
+    #[serde(default)]
+    pub next_reconcile_unix: Option<i64>,
 }

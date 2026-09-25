@@ -13,8 +13,13 @@
 //!    cached in `state.json`. Duplicates are dropped.
 //! 3. **Per-link budget.** The active link has a `max_in_flight` and
 //!    `min_period_ms`. We never exceed either.
+//!
+//! Separately, every `reconcile_period_secs` (6 h by default) the cleaner
+//! reconciles the sender's downlinked ledger snapshot against `final_dir`
+//! and re-requests files that were lost whole (see [`reconciler`]).
 
 mod dedup;
+mod reconciler;
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -29,6 +34,7 @@ use parachuter::reassembler::Reassembler;
 use tokio::sync::{Mutex, Notify};
 
 use self::dedup::DedupTable;
+use self::reconciler::ReconcileState;
 use crate::DaemonArgs;
 
 pub async fn run(args: DaemonArgs) -> anyhow::Result<()> {
@@ -50,11 +56,17 @@ pub async fn run(args: DaemonArgs) -> anyhow::Result<()> {
     ));
 
     let run_now = Arc::new(Notify::new());
+    let reconcile_now = Arc::new(Notify::new());
+    let rstate_path = ReconcileState::path_for(&cfg_snap.cleaner.state_path);
+    let rstate = Arc::new(Mutex::new(ReconcileState::load(&rstate_path)));
 
     let control = CleanerControl {
         dedup: dedup.clone(),
         active_link: cfg_snap.cleaner.active_link.clone(),
         run_now: run_now.clone(),
+        reconcile_now: reconcile_now.clone(),
+        rstate: rstate.clone(),
+        live: live.clone(),
     };
     let control_path = cfg_snap.cleaner.control_socket.clone();
     let server = ControlServer::bind(&control_path, control).await?;
@@ -71,14 +83,36 @@ pub async fn run(args: DaemonArgs) -> anyhow::Result<()> {
     spawn_shutdown_watcher();
 
     let period = Duration::from_secs(cfg_snap.cleaner.run_period_secs);
+    let mut force_reconcile = false;
     loop {
         if let Err(e) = run_pass(&live, &reassembler, &dedup, &sender_client).await {
             tracing::warn!(?e, "cleaner pass failed");
         }
+
+        // Reconcile when the period has elapsed (schedule persists across
+        // restarts) or when an operator asked for it.
+        let due = {
+            let st = rstate.lock().await;
+            chrono::Utc::now().timestamp() >= st.next_due_unix(live.current().cleaner.reconcile_period_secs)
+        };
+        if due || std::mem::take(&mut force_reconcile) {
+            let mut st = rstate.lock().await;
+            if let Err(e) = reconciler::run(&live, &reassembler, &sender_client, &mut st).await {
+                tracing::warn!(?e, "reconcile pass failed");
+            }
+            if let Err(e) = st.save(&rstate_path) {
+                tracing::warn!(?e, "could not save reconcile state");
+            }
+        }
+
         tokio::select! {
             _ = tokio::time::sleep(period) => {},
             _ = run_now.notified() => {
                 tracing::info!("cleaner pass triggered by control request");
+            }
+            _ = reconcile_now.notified() => {
+                tracing::info!("reconcile triggered by control request");
+                force_reconcile = true;
             }
         }
     }
@@ -237,6 +271,9 @@ struct CleanerControl {
     dedup: Arc<Mutex<DedupTable>>,
     active_link: String,
     run_now: Arc<Notify>,
+    reconcile_now: Arc<Notify>,
+    rstate: Arc<Mutex<ReconcileState>>,
+    live: LiveConfig,
 }
 
 impl ControlHandler for CleanerControl {
@@ -257,14 +294,23 @@ impl ControlHandler for CleanerControl {
                         manifest_pending,
                     })
                     .collect();
+                let rs = self.rstate.lock().await;
                 Response::CleanerStatus(CleanerStatus {
                     in_flight,
                     recent_requests: dt.recent_count() as u32,
                     active_link: self.active_link.clone(),
+                    last_reconcile: rs.last_summary.clone(),
+                    next_reconcile_unix: Some(
+                        rs.next_due_unix(self.live.current().cleaner.reconcile_period_secs),
+                    ),
                 })
             }
             Request::CleanerRunNow => {
                 self.run_now.notify_one();
+                Response::Ok
+            }
+            Request::CleanerReconcileNow => {
+                self.reconcile_now.notify_one();
                 Response::Ok
             }
             _ => Response::Unsupported,

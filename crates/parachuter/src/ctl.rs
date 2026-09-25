@@ -84,6 +84,9 @@ enum CtlCmd {
     Flush,
     /// Tell the cleaner to scan immediately.
     CleanerRun,
+    /// Tell the cleaner to reconcile the newest downlinked ledger snapshot
+    /// against the final directory now, re-requesting files lost whole.
+    ReconcileRun,
 }
 
 pub async fn run(args: CtlArgs) -> anyhow::Result<()> {
@@ -143,6 +146,7 @@ pub async fn run(args: CtlArgs) -> anyhow::Result<()> {
         CtlCmd::ResendName { file_id } => Request::SenderResendName { file_id },
         CtlCmd::Flush => Request::SenderFlush,
         CtlCmd::CleanerRun => Request::CleanerRunNow,
+        CtlCmd::ReconcileRun => Request::CleanerReconcileNow,
     };
     let resp = client.call(req).await.context("control call failed")?;
     println!("{}", serde_json::to_string_pretty(&resp)?);

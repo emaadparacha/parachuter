@@ -24,6 +24,7 @@ specific to balloons or telescopes.
 - [Rate Limiter](#rate-limiter)
 - [File Priority Queue](#file-priority-queue)
 - [Cleaner Dedup Logic](#cleaner-dedup-logic)
+- [Reconciliation](#reconciliation)
 - [Config Hot-Reload](#config-hot-reload)
 - [Single-Binary Layout](#single-binary-layout)
 - [Design Decisions](#design-decisions)
@@ -242,7 +243,8 @@ CREATE TABLE files (
     file_size  INTEGER NOT NULL,
     created_at TEXT NOT NULL,
     chunk_size INTEGER NOT NULL DEFAULT 16192,
-    sha256     TEXT   -- optional, reserved for future use
+    sha256     TEXT,  -- optional, reserved for future use
+    queued_at  TEXT   -- last time the file was queued for a full send
     …
 );
 ```
@@ -253,6 +255,9 @@ Key design choices:
   2 147 483 647 files; `i64` won't.
 - `chunk_size` is stored per file so a receiver can detect when the sender
   changed chunk size between sends of the same file.
+- `queued_at` is stamped on every full send (first pass or resend). The
+  reconciler uses it to tell "lost" from "still on its way". Ledgers created
+  before the column existed gain it automatically on open.
 - WAL mode is enabled so reads (status dashboard) don't block sender
   writes.
 - `PRAGMA synchronous = NORMAL`; safe with WAL — one OS crash at worst
@@ -380,6 +385,37 @@ The `cleaner-run` control command wakes the main loop immediately via a
 
 ---
 
+## Reconciliation
+
+The cleaner repairs files the ground knows about. A file whose every packet
+was lost (a long outage, or a sender restart with work still queued in
+memory) leaves no trace on the ground, while the sender's ledger says it was
+sent. Reconciliation catches these without any ground-to-flight
+acknowledgements:
+
+- The sender writes its ledger to `files_sent_list_<unix>.csv` every
+  `status_dump_period_secs` (6 h) inside its first priority directory, so the
+  snapshot is downlinked like any other file.
+- The receiver finalises each file at `final_dir` + its full payload path
+  (`reconcile::ground_path`, which also drops `..` components so a name can
+  never escape `final_dir`). Anything in `final_dir` is complete by
+  construction.
+- Every `reconcile_period_secs` (6 h) the cleaner reads the newest snapshot
+  under `final_dir` and classifies each row (`reconcile::classify`): complete
+  (right path, right size), in flight (in `holding/`), queued (in the sender's
+  live queue), too recent (queued within `reconcile_grace_secs`, 3 h), gone on
+  payload, size mismatch, or missing.
+- Missing files are resent in full with `SenderEnqueue { start: -1,
+  interrupt: false }`, so they join the back of the queue. Each is requested
+  at most once per period; the schedule and request memory persist in
+  `<state_path>.reconcile.json` so a cleaner restart neither skips nor
+  repeats a pass.
+
+`final_dir` is the ground's record of what arrived, so nothing else may move
+files out of it.
+
+---
+
 ## Config Hot-Reload
 
 `LiveConfig` wraps an `Arc<RwLock<Arc<Config>>>`. A background thread
@@ -448,11 +484,13 @@ A future improvement could hold the chunk in a small in-memory buffer
 until `chunk_payload_size` is established.
 
 ### No end-to-end acknowledgement
-The UDP channel is purely unidirectional. The receiver has no way to tell
-the sender "file complete" without a separate channel. The cleaner's
-approach (inspect the holding dir, request only what's missing) is the
-intended mechanism, but relies on the cleaner having access to the
-holding directory.
+The UDP channel is purely unidirectional. The receiver never tells the
+sender "file complete". Partial files are repaired by the cleaner, and files
+lost whole are caught by [reconciliation](#reconciliation), which compares
+the sender's downlinked ledger with `final_dir`. Both rely on the cleaner
+reaching the sender's control socket, and a lost file is only noticed after
+the next snapshot lands and the grace period passes (up to roughly 6 h +
+6 h + 3 h in the worst case with default settings).
 
 ### No multipath
 Only one link is active at a time. If the pilot link fails, the operator

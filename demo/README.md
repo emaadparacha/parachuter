@@ -49,3 +49,42 @@ source in this repo (before publishing, or while changing the crate), swap in:
 ```toml
 parachuter = { path = "../crates/parachuter" }
 ```
+
+## Live demo: the real daemons, side by side
+
+`live/run.sh` starts the actual `parachuter` sender, receiver, cleaner and
+monitor on your laptop in one six-pane tmux window, with a lossy link in the
+middle so there's something to recover from:
+
+```
+┌──────────────┬──────────────┬──────────────┐
+│ SENDER       │ LOSSY LINK   │ RECEIVER     │
+├──────────────┼──────────────┼──────────────┤
+│ CONTROL      │ CLEANER      │ MONITOR      │
+└──────────────┴──────────────┴──────────────┘
+```
+
+```bash
+brew install tmux          # once
+./live/run.sh              # 20% loss; or ./live/run.sh 35
+```
+
+In the **CONTROL** pane (you):
+
+| Type | What happens |
+|---|---|
+| `demo` | sends a sample science frame and a GoPro clip |
+| `send ~/Pictures/m31.jpg` | sends your own file (science queue, highest priority) |
+| `ctl status` | what the sender is doing right now |
+| `ctl set-link --link tdrss` | drop to a satellite-speed link (250 kbps) live |
+| `ctl set-state paused` / `auto` | pause and resume |
+| `landed`, `verify` | list arrivals, prove they're byte-for-byte identical |
+| `stop` | end the demo |
+
+In the **LOSSY LINK** pane, type a number and press Enter to change the loss
+rate on the fly (try `50`, then `0`).
+
+Everything lives in `/tmp/parachuter-demo`, including the generated
+`config.toml`. Edit it while the demo runs and the daemons pick up the change
+within a second. The script uses `parachuter` from your PATH if you've run
+`cargo install parachuter`, otherwise it builds it from this repo.

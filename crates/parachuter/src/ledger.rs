@@ -12,6 +12,10 @@
 //! * `sha256` column is reserved for an optional whole-file checksum the
 //!   sender can compute lazily and embed in the manifest packet.
 //!
+//! * `queued_at` records when the file was last queued for a full send. The
+//!   ground-side reconciler uses it to tell "lost" from "still on its way".
+//!   Older ledgers gain the column automatically when opened.
+//!
 //! The connection runs in WAL mode so reads (e.g. a status dashboard) don't
 //! block the sender's writes.
 
@@ -33,7 +37,8 @@ CREATE TABLE IF NOT EXISTS files (
     images_per_bias  INTEGER NOT NULL DEFAULT 0,
     still_exists     INTEGER NOT NULL DEFAULT 1,
     chunk_size       INTEGER NOT NULL DEFAULT 16192,
-    sha256           TEXT
+    sha256           TEXT,
+    queued_at        TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_files_name ON files(file_name);
 CREATE INDEX IF NOT EXISTS idx_files_still ON files(still_exists);
@@ -63,6 +68,9 @@ pub struct FileRecord {
     pub chunk_size: u32,
     /// Optional sha256 hex digest, populated lazily.
     pub sha256: Option<String>,
+    /// When the file was last queued for a full send (first pass, or a
+    /// whole-file resend). `None` for rows written before this column existed.
+    pub queued_at: Option<DateTime<Utc>>,
 }
 
 /// Embedded ledger.
@@ -85,6 +93,7 @@ impl Ledger {
              PRAGMA foreign_keys = ON;",
         )?;
         db.execute_batch(SCHEMA)?;
+        migrate(&db)?;
         Ok(Self { db, db_path: path })
     }
 
@@ -145,7 +154,7 @@ impl Ledger {
             .query_row(
                 "SELECT file_id, file_name, file_size, created_at,
                         images_per_dark, images_per_flat, images_per_bias,
-                        still_exists, chunk_size, sha256
+                        still_exists, chunk_size, sha256, queued_at
                    FROM files WHERE file_id = ?1",
                 params![file_id],
                 row_to_record,
@@ -161,7 +170,7 @@ impl Ledger {
             .query_row(
                 "SELECT file_id, file_name, file_size, created_at,
                         images_per_dark, images_per_flat, images_per_bias,
-                        still_exists, chunk_size, sha256
+                        still_exists, chunk_size, sha256, queued_at
                    FROM files WHERE file_name = ?1",
                 params![name],
                 row_to_record,
@@ -179,13 +188,24 @@ impl Ledger {
         Ok(())
     }
 
+    /// Record that a file was just queued for a full send. Called on the first
+    /// pass and on every whole-file resend, so the reconciler's grace period
+    /// restarts each time.
+    pub fn mark_queued(&mut self, file_id: i64, when: DateTime<Utc>) -> Result<()> {
+        self.db.execute(
+            "UPDATE files SET queued_at = ?1 WHERE file_id = ?2",
+            params![when.to_rfc3339(), file_id],
+        )?;
+        Ok(())
+    }
+
     /// Iterate every record in the ledger. Returns owned `FileRecord`s for
     /// API simplicity – the table is small in practice (10s of thousands).
     pub fn all(&self) -> Result<Vec<FileRecord>> {
         let mut stmt = self.db.prepare(
             "SELECT file_id, file_name, file_size, created_at,
                     images_per_dark, images_per_flat, images_per_bias,
-                    still_exists, chunk_size, sha256
+                    still_exists, chunk_size, sha256, queued_at
                FROM files ORDER BY file_id",
         )?;
         let rows = stmt
@@ -201,12 +221,12 @@ impl Ledger {
         let mut f = std::fs::File::create(out)?;
         writeln!(
             f,
-            "file_id,file_name,file_size,created_at,images_per_dark,images_per_flat,images_per_bias,still_exists,chunk_size,sha256"
+            "file_id,file_name,file_size,created_at,images_per_dark,images_per_flat,images_per_bias,still_exists,chunk_size,sha256,queued_at"
         )?;
         for r in self.all()? {
             writeln!(
                 f,
-                "{},{},{},{},{},{},{},{},{},{}",
+                "{},{},{},{},{},{},{},{},{},{},{}",
                 r.file_id,
                 csv_escape(&r.file_name),
                 r.file_size,
@@ -217,6 +237,7 @@ impl Ledger {
                 if r.still_exists { "t" } else { "f" },
                 r.chunk_size,
                 r.sha256.as_deref().unwrap_or(""),
+                r.queued_at.map(|t| t.to_rfc3339()).unwrap_or_default(),
             )?;
         }
         f.sync_all()?;
@@ -240,7 +261,24 @@ fn row_to_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<FileRecord> {
         still_exists: row.get::<_, i64>(7)? != 0,
         chunk_size: row.get::<_, i64>(8)? as u32,
         sha256: row.get(9)?,
+        queued_at: row
+            .get::<_, Option<String>>(10)?
+            .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+            .map(|d| d.with_timezone(&Utc)),
     })
+}
+
+/// Bring an existing ledger up to the current schema. Only ever adds
+/// nullable columns, so it is safe to run on every open.
+fn migrate(db: &Connection) -> Result<()> {
+    let mut stmt = db.prepare("PRAGMA table_info(files)")?;
+    let cols = stmt
+        .query_map([], |r| r.get::<_, String>(1))?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    if !cols.iter().any(|c| c == "queued_at") {
+        db.execute_batch("ALTER TABLE files ADD COLUMN queued_at TEXT;")?;
+    }
+    Ok(())
 }
 
 fn csv_escape(s: &str) -> String {
@@ -268,6 +306,50 @@ mod tests {
             .upsert_file("/data/foo.fits", 100, Utc::now(), 0, 0, 0, 16192)
             .unwrap();
         assert_eq!(id1, id2);
+    }
+
+    #[test]
+    fn mark_queued_round_trips_and_lands_in_csv() {
+        let dir = tempdir().unwrap();
+        let mut l = Ledger::open(dir.path().join("ledger.sqlite")).unwrap();
+        let id = l
+            .upsert_file("/data/qsc/science/m31_002.fits.bz2", 42, Utc::now(), 0, 0, 0, 16192)
+            .unwrap();
+        assert!(l.get(id).unwrap().unwrap().queued_at.is_none());
+        let when = DateTime::parse_from_rfc3339("2026-09-25T18:00:00Z").unwrap().with_timezone(&Utc);
+        l.mark_queued(id, when).unwrap();
+        assert_eq!(l.get(id).unwrap().unwrap().queued_at, Some(when));
+        let out = dir.path().join("dump.csv");
+        l.dump_csv(&out).unwrap();
+        let text = std::fs::read_to_string(out).unwrap();
+        assert!(text.lines().next().unwrap().ends_with(",queued_at"));
+        assert!(text.contains("2026-09-25T18:00:00+00:00"));
+    }
+
+    #[test]
+    fn old_ledger_gains_queued_at_column() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("old.sqlite");
+        {
+            // A ledger created before queued_at existed.
+            let db = Connection::open(&path).unwrap();
+            db.execute_batch(
+                "CREATE TABLE files (
+                    file_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    file_name TEXT NOT NULL UNIQUE, file_size INTEGER NOT NULL,
+                    created_at TEXT NOT NULL, images_per_dark INTEGER NOT NULL DEFAULT 0,
+                    images_per_flat INTEGER NOT NULL DEFAULT 0, images_per_bias INTEGER NOT NULL DEFAULT 0,
+                    still_exists INTEGER NOT NULL DEFAULT 1, chunk_size INTEGER NOT NULL DEFAULT 16192,
+                    sha256 TEXT);
+                 INSERT INTO files (file_name, file_size, created_at) VALUES ('/data/a.fits', 1, '2026-01-01T00:00:00+00:00');",
+            )
+            .unwrap();
+        }
+        let mut l = Ledger::open(&path).unwrap();
+        let r = l.get_by_name("/data/a.fits").unwrap().unwrap();
+        assert!(r.queued_at.is_none());
+        l.mark_queued(r.file_id, Utc::now()).unwrap();
+        assert!(l.get(r.file_id).unwrap().unwrap().queued_at.is_some());
     }
 
     #[test]

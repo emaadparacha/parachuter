@@ -5,7 +5,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.74"
 license-file = "LICENSE"
@@ -19,7 +19,7 @@ keywords = ["udp", "file-transfer", "downlink", "satellite", "networking"]
 categories = ["network-programming", "filesystem", "command-line-utilities", "science"]
 
 [workspace.dependencies]
-parachuter = { path = "crates/parachuter", version = "0.1.0" }
+parachuter = { path = "crates/parachuter", version = "0.2.0" }
 
 # Logging / errors
 tracing = "0.1"

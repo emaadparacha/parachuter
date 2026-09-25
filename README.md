@@ -27,6 +27,7 @@ deployment runs `parachuter sender` as its own unit.
 - [Runtime Control (`parachuter ctl`)](#runtime-control-parachuter-ctl)
 - [Named Links](#named-links)
 - [Dedup and Re-request Logic](#dedup-and-re-request-logic)
+- [Recovering Files Lost Whole](#recovering-files-lost-whole)
 - [Building](#building)
 - [Testing](#testing)
 - [Deployment (systemd)](#deployment-systemd)
@@ -141,7 +142,7 @@ cargo build --release
 
 # 2. Create directories
 sudo mkdir -p /etc/parachuter
-sudo mkdir -p /var/lib/parachuter/{holding,downloads,csv}
+sudo mkdir -p /var/lib/parachuter/{holding,downloads}
 sudo mkdir -p /run/parachuter
 sudo mkdir -p /data/parachuter/queue/science
 
@@ -362,7 +363,7 @@ note     = "TDRSS satellite relay (multicast)"
 | `control_socket` | `/run/parachuter/sender.sock` | Unix socket path. |
 | `initial_state` | `"auto"` | One of `auto`, `manual`, `paused`, `debug`. |
 | `recheck_period_secs` | `100` | How often to scan priority dirs when queue is empty. |
-| `status_dump_period_secs` | `21600` | How often to write a ledger CSV snapshot. |
+| `status_dump_period_secs` | `21600` | How often to write a ledger CSV snapshot into `status_dumps/` under the first priority directory. It is downlinked like any other file and drives [reconciliation](#recovering-files-lost-whole). |
 
 #### Auto vs. debug priority lists
 
@@ -409,8 +410,7 @@ your word for it.
 | `bind_ip` | `"0.0.0.0"` | IP to bind the receive socket. |
 | `bind_port` | `41410` | UDP port to listen on. |
 | `holding_dir` | `/var/lib/parachuter/holding` | In-flight assemblies live here. |
-| `final_dir` | `/var/lib/parachuter/downloads` | Completed files move here. |
-| `csv_dir` | `/var/lib/parachuter/csv` | CSV ledger snapshots received from sender. |
+| `final_dir` | `/var/lib/parachuter/downloads` | Completed files move here, at `final_dir` + their full payload path (`/data/qsc/m31.fits.bz2` → `<final_dir>/data/qsc/m31.fits.bz2`). |
 | `control_socket` | `/run/parachuter/receiver.sock` | Unix socket path. |
 
 ### `[cleaner]`
@@ -418,9 +418,11 @@ your word for it.
 | Key | Default | Description |
 |---|---|---|
 | `holding_dir` | same as receiver | Must match receiver's `holding_dir`. |
+| `final_dir` | same as receiver | Must match receiver's `final_dir`. |
 | `active_link` | `"pilot"` | Which link budget to apply. |
 | `run_period_secs` | `60` | How often the cleaner wakes to scan. Can be triggered immediately with `cleaner-run`. |
-| `checker_period_secs` | `7200` | How often to reconcile CSV ledgers against `final_dir`. |
+| `reconcile_period_secs` | `21600` | How often to reconcile the newest downlinked ledger snapshot against `final_dir` (6 h). The old name `checker_period_secs` is still accepted. |
+| `reconcile_grace_secs` | `10800` | How long after a file was queued before it can be called lost (3 h). |
 | `dedup_ttl_secs` | `300` | How long to suppress a re-request for the same chunk. |
 | `state_path` | `/var/lib/parachuter/cleaner-state.json` | Persistent dedup table. |
 | `control_socket` | `/run/parachuter/cleaner.sock` | Unix socket path. |
@@ -480,6 +482,9 @@ parachuter ctl -s /run/parachuter/sender.sock flush
 
 # Trigger a cleaner scan immediately (does not wait for the next timer tick)
 parachuter ctl -s /run/parachuter/cleaner.sock cleaner-run
+
+# Reconcile the downlinked ledger against downloads now (don't wait 6 h)
+parachuter ctl -s /run/parachuter/cleaner.sock reconcile-run
 ```
 
 ---
@@ -514,6 +519,45 @@ link:
 
 The cleaner can be triggered on demand via `parachuter ctl ... cleaner-run`,
 which wakes the main loop immediately (no waiting for the next timer tick).
+
+---
+
+## Recovering Files Lost Whole 🔁
+
+The cleaner can only repair files the ground knows about. If an outage
+swallows *every* packet of a file, the ground never creates a manifest for
+it, while the sender's ledger says it was sent. Reconciliation closes that
+gap without any acknowledgements from the ground:
+
+1. **The sender downlinks its own ledger.** Every `status_dump_period_secs`
+   (6 h) it writes `files_sent_list_<unix>.csv` into `status_dumps/` under
+   its first priority directory, so the snapshot is sent down like any other
+   file. It lists every file's full path, size, whether it still exists, and
+   `queued_at`, when it was last queued for a full send.
+2. **Files land at their payload path.** `/data/qsc/science/m31_002.fits.bz2`
+   lands at `<final_dir>/data/qsc/science/m31_002.fits.bz2`, and only once it
+   is complete: partial files stay in `holding/` until an atomic rename.
+3. **The cleaner compares the two.** Every `reconcile_period_secs` (6 h), it
+   reads the newest snapshot under `final_dir` and classifies each file:
+
+| Verdict | Meaning | Action |
+|---|---|---|
+| complete | At its mirrored path with the ledger's size | none |
+| in flight | Partially received, in `holding/` | the cleaner already chases its gaps; flagged if unchanged for longer than the grace period |
+| queued | Still in the sender's queue | none |
+| too recent | Queued less than `reconcile_grace_secs` (3 h) ago | wait |
+| gone on payload | Never arrived and deleted on the payload | reported; cannot be resent |
+| size mismatch | Landed, but not at the ledger's size | reported, not resent (the payload copy likely changed after sending) |
+| **missing** | **Lost whole** | **resent in full, at the back of the queue** |
+
+A file is requested at most once per period; if the resend is lost too, the
+next pass asks again. No ground-side log is needed: `final_dir` *is* the
+record, so it must be treated as an archive (copy files out, don't move
+them). Run a pass on demand with `parachuter ctl -s … reconcile-run`; the
+last result is in `parachuter ctl -s /run/parachuter/cleaner.sock status`.
+
+This also recovers files that were queued but never sent before a sender
+restart, since the queue lives in memory but the ledger does not.
 
 ---
 

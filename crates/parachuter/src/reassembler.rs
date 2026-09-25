@@ -310,9 +310,10 @@ impl Reassembler {
             return Err(Error::BadManifest("missing filename".into()));
         }
 
-        // Strip a leading slash off the embedded name so it sits inside `finals/`.
-        let cleaned_name = manifest.name.trim_start_matches('/');
-        let dest = self.finals.join(cleaned_name);
+        // Mirror the payload path under the final directory:
+        // /data/qsc/m31.fits.bz2 -> <final>/data/qsc/m31.fits.bz2. The same
+        // mapping the reconciler uses, and it cannot escape `finals/`.
+        let dest = crate::reconcile::ground_path(&self.finals, &manifest.name);
         if let Some(parent) = dest.parent() {
             std::fs::create_dir_all(parent)?;
         }
