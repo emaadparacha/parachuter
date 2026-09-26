@@ -1,0 +1,1397 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>parachuter · reliable downlink over lossy one-way links</title>
+<meta name="description" content="parachuter is a Rust crate and CLI that delivers files over lossy, one-way UDP links. Watch it work, live.">
+<meta name="color-scheme" content="dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 36'%3E%3Cpath d='M3 14Q3 3 20 3Q37 3 37 14Q33 11 28.5 14Q24.5 11 20 14Q15.5 11 11.5 14Q7 11 3 14Z' fill='%23FF8A3D'/%3E%3Cpath d='M3 14L18 28M11.5 14L19 28M28.5 14L21 28M37 14L22 28' stroke='%23EEF1F7' stroke-width='1.3'/%3E%3Crect x='16.5' y='28' width='7' height='5.5' rx='1' fill='%235CC8EA'/%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#0C111D; --bg2:#111827; --panel:#141B2C; --panel2:#1A2338; --deep:#0A0F1A;
+  --line:#26314A; --line2:#3A4560;
+  --text:#EEF1F7; --muted:#A6B0C4; --faint:#8793AB;
+  --cyan:#5CC8EA; --cyan-bg:#16324A; --cyan-dim:#3E93B3;
+  --orange:#FF8A3D; --orange-bg:#3A2416; --orange-lt:#FFB98A;
+  --lav:#B9A6F2; --lav-bg:#2A2545;
+  --red:#FF5C6C; --green:#5EE0A0;
+  --serif:'Instrument Serif',Georgia,serif;
+  --sans:'IBM Plex Sans',system-ui,-apple-system,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --r:14px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+a{color:var(--cyan);text-decoration:none}a:hover{color:#9FDFF3;text-decoration:underline}
+h1,h2,h3{font-weight:400;margin:0}
+code,.mono{font-family:var(--mono)}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+
+.wrap{max-width:1280px;margin:0 auto;padding:0 32px}
+.kicker{font-family:var(--mono);font-size:14px;letter-spacing:.14em;color:var(--orange);text-transform:uppercase}
+.h2{font-family:var(--serif);font-size:clamp(38px,5vw,60px);line-height:1.04;letter-spacing:-.01em}
+.lede{color:var(--muted);font-size:18px;max-width:760px}
+section{padding:110px 0 30px}
+.sec-head{display:flex;flex-direction:column;gap:14px;margin-bottom:36px}
+
+/* nav */
+nav.top{position:sticky;top:0;z-index:40;background:rgba(12,17,29,.82);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+nav.top .wrap{display:flex;align-items:center;gap:28px;height:60px}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--serif);font-size:28px;color:var(--text)}
+.brand:hover{text-decoration:none;color:var(--text)}
+nav.top .links{display:flex;gap:22px;margin-left:auto;font-size:14px}
+nav.top .links a{color:var(--muted)}nav.top .links a:hover{color:var(--text);text-decoration:none}
+.gh{padding:7px 14px;border:1px solid var(--line2);border-radius:8px;color:var(--text)!important;font-family:var(--mono);font-size:13px}
+
+/* hero */
+.hero{position:relative;min-height:88vh;display:flex;align-items:center;overflow:hidden;border-bottom:1px solid var(--line)}
+#sky{position:absolute;inset:0;width:100%;height:100%}
+.hero .wrap{position:relative;z-index:2;padding-top:40px;padding-bottom:60px}
+.hero h1{font-family:var(--serif);font-size:clamp(72px,13vw,168px);line-height:.88;letter-spacing:-.02em}
+.hero p.tag{font-size:clamp(20px,2.4vw,28px);max-width:820px;margin:26px 0 34px;line-height:1.35}
+.hero p.tag em{font-style:normal;color:var(--orange)}
+.cta{display:flex;gap:14px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:10px;padding:13px 20px;border-radius:10px;border:1px solid var(--line2);background:var(--panel);color:var(--text);font-size:15px;cursor:pointer;transition:border-color .15s,background .15s;min-height:44px}
+.btn:hover{border-color:var(--cyan);text-decoration:none;color:var(--text)}
+.btn.primary{background:var(--orange);border-color:var(--orange);color:#1b0f06;font-weight:600}
+.btn.primary:hover{background:#ff9d5c;color:#1b0f06}
+.copy{font-family:var(--mono);font-size:14px}
+.copy .d{color:var(--orange)}
+.hero-stats{display:flex;gap:14px;margin-top:44px;flex-wrap:wrap}
+.hs{padding:14px 18px;background:rgba(20,27,44,.8);border:1px solid var(--line);border-radius:12px;min-width:150px}
+.hs b{display:block;font-family:var(--serif);font-weight:400;font-size:40px;line-height:1;color:var(--cyan)}
+.hs span{font-size:13px;color:var(--muted)}
+
+/* problem */
+.links3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:28px}
+.lk{padding:22px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r)}
+.lk .rate{font-family:var(--serif);font-size:44px;color:var(--cyan);line-height:1}
+.lk .nm{font-weight:600;margin-top:10px}
+.lk p{margin:6px 0 0;color:var(--muted);font-size:14px}
+.why{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:16px}
+.why div{padding:18px 20px;border-radius:12px;background:var(--bg2);border:1px solid var(--line);font-size:15px;color:var(--muted)}
+.why b{color:var(--text);font-weight:600;display:block;margin-bottom:4px}
+
+/* simulator */
+.sim{background:var(--bg2);border:1px solid var(--line);border-radius:20px;padding:22px;display:flex;flex-direction:column;gap:18px}
+.sim-top{display:grid;grid-template-columns:300px minmax(0,1fr) 340px;gap:16px;min-height:430px}
+.pane{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.pane h3{font-family:var(--mono);font-size:12px;letter-spacing:.14em;color:var(--cyan);display:flex;justify-content:space-between;align-items:center}
+.pane h3 .st{color:var(--muted);letter-spacing:0}
+.lbl{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--faint);text-transform:uppercase}
+.queue{display:flex;flex-direction:column;gap:5px;min-height:150px}
+.qi{font-family:var(--mono);font-size:12px;padding:6px 9px;border-radius:6px;border:1px solid var(--line2);background:var(--panel2);display:flex;justify-content:space-between;gap:8px;transition:transform .2s}
+.qi.R{border-color:var(--orange);background:var(--orange-bg);color:var(--orange-lt)}
+.qi.M{border-style:dashed}
+.qi .c{color:var(--faint)}
+.qi.head{box-shadow:0 0 0 1px var(--cyan) inset}
+.folders{display:flex;flex-direction:column;gap:6px}
+.fd{font-family:var(--mono);font-size:12px;display:flex;gap:8px;align-items:flex-start;color:var(--muted)}
+.fd .n{color:var(--faint);min-width:74px}
+.fd .fl{display:flex;flex-direction:column;gap:2px}
+.fd .fl span{color:var(--text)}
+.fd .fl span.sent{color:var(--faint);text-decoration:line-through}
+.linkpane{padding:0;overflow:hidden;position:relative}
+#lane{width:100%;height:100%;display:block;min-height:430px}
+.linkinfo{position:absolute;top:12px;left:0;right:0;display:flex;justify-content:center;gap:10px;pointer-events:none}
+.pill{font-family:var(--mono);font-size:12px;padding:5px 10px;border-radius:999px;background:rgba(10,15,26,.85);border:1px solid var(--line2);color:var(--muted)}
+.pill b{color:var(--text);font-weight:500}
+.ground{overflow:auto;max-height:430px}
+.gfile{display:flex;flex-direction:column;gap:8px;padding:10px;border-radius:10px;background:var(--panel2);border:1px solid var(--line)}
+.gfile.done{border-color:var(--cyan)}
+.gfile .t{display:flex;justify-content:space-between;font-family:var(--mono);font-size:12px;gap:8px}
+.gfile .t .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bits{display:grid;grid-template-columns:repeat(24,minmax(0,1fr));gap:2px}
+.bits i{display:block;aspect-ratio:1;border-radius:2px;background:var(--orange-bg);outline:1px solid rgba(255,138,61,.55);outline-offset:-1px;transition:background .25s}
+.bits i.on{background:var(--cyan-dim);outline:none}
+.bits i.new{background:#F5F8FC;outline:none}
+.gfile .mf{font-family:var(--mono);font-size:11px;color:var(--faint);display:flex;justify-content:space-between;gap:6px}
+.landed{font-family:var(--mono);font-size:12px;color:var(--cyan);display:flex;justify-content:space-between}
+.flash{animation:flash .5s}
+@keyframes flash{0%{box-shadow:0 0 0 2px var(--red)}100%{box-shadow:0 0 0 0 transparent}}
+
+.controls{display:grid;grid-template-columns:auto 1fr 1fr auto;gap:14px;align-items:center}
+.cg{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.cb{padding:9px 13px;border-radius:8px;border:1px solid var(--line2);background:var(--panel);cursor:pointer;font-size:14px;min-height:40px}
+.cb:hover{border-color:var(--cyan)}
+.cb.on{border-color:var(--cyan);background:var(--cyan-bg);color:var(--cyan)}
+.cb.warn:hover{border-color:var(--orange)}
+.cb.big{min-width:96px;font-weight:600}
+.slider{display:flex;flex-direction:column;gap:4px}
+.slider label{display:flex;justify-content:space-between;font-size:13px;color:var(--muted)}
+.slider label b{font-family:var(--mono);color:var(--text);font-weight:500}
+input[type=range]{width:100%;accent-color:var(--orange);height:28px}
+.stats{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:10px}
+.stat{padding:10px 12px;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+.stat b{display:block;font-family:var(--mono);font-size:20px;font-weight:500}
+.stat span{font-size:11px;color:var(--faint);letter-spacing:.06em;text-transform:uppercase}
+.sim-bottom{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+.log,.term{background:var(--deep);border:1px solid var(--line);border-radius:12px;font-family:var(--mono);font-size:12.5px;height:240px;display:flex;flex-direction:column}
+.log .hd,.term .hd{padding:9px 14px;border-bottom:1px solid var(--line);color:var(--faint);font-size:11px;letter-spacing:.1em;display:flex;justify-content:space-between}
+.log ol{list-style:none;margin:0;padding:8px 14px;overflow:auto;flex:1;display:flex;flex-direction:column;gap:2px}
+.log li{flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.log li .tm{color:var(--faint);margin-right:8px}
+.c-cyan{color:var(--cyan)}.c-orange{color:var(--orange)}.c-red{color:var(--red)}.c-muted{color:var(--muted)}.c-lav{color:var(--lav)}.c-green{color:var(--green)}
+.term .out{flex:1;overflow:auto;padding:8px 14px;white-space:pre-wrap;color:var(--muted)}
+.term form{display:flex;border-top:1px solid var(--line)}
+.term form span{padding:10px 0 10px 14px;color:var(--orange)}
+.term input{flex:1;background:transparent;border:0;color:var(--text);font:inherit;padding:10px;outline:none}
+.hint{font-size:13px;color:var(--faint)}
+
+/* anatomy */
+.ruler-groups{display:grid;grid-template-columns:repeat(32,minmax(0,1fr));gap:3px;margin-bottom:8px}
+.rg{display:flex;flex-direction:column;gap:6px}
+.rg .l{font-family:var(--mono);font-size:12px;letter-spacing:.1em;display:flex;justify-content:space-between;gap:6px;padding-right:18px}
+.rg .l span:last-child{color:var(--muted);letter-spacing:0;font-family:var(--sans);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rg .b{height:9px;border:2px solid;border-bottom:0;border-radius:4px 4px 0 0}
+.bytes{display:grid;grid-template-columns:repeat(32,minmax(0,1fr));gap:3px}
+.by{height:54px;border-radius:5px;border:1px solid var(--line2);background:#232C42;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;font-family:var(--mono);transition:transform .1s,box-shadow .15s;padding:0;color:var(--text)}
+.by b{font-size:13px;font-weight:600}
+.by small{font-size:9.5px;color:var(--faint)}
+.by.loc{background:var(--cyan-bg);border-color:var(--cyan)}
+.by.ver{background:var(--orange-bg);border-color:var(--orange)}
+.by.pl{background:#171E30;border-style:dashed;border-color:#6F7A92}
+.by.hl{box-shadow:0 0 0 2px var(--text)}
+.by.sel{box-shadow:0 0 0 2px var(--orange);transform:translateY(-2px)}
+.by.dirty b{color:var(--red)}
+.anat{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:18px;margin-top:22px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:22px}
+.card h3{font-family:var(--serif);font-size:30px;line-height:1.1;margin-bottom:8px}
+.fieldinfo .fn{font-family:var(--mono);font-size:20px;font-weight:600}
+.fieldinfo .fb{font-family:var(--mono);font-size:12px;padding:3px 8px;border-radius:4px;border:1px solid var(--line2);color:var(--muted)}
+.fieldinfo p{margin:10px 0 0;color:var(--muted)}
+.fieldinfo p b{color:var(--text);font-weight:600}
+.bitrow{display:flex;gap:6px;margin-top:10px}
+.bit{width:44px;height:44px;border-radius:8px;border:1px solid var(--line2);background:var(--panel2);font-family:var(--mono);font-size:16px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}
+.bit small{font-size:9px;color:var(--faint);margin-top:3px}
+.bit.one{background:var(--cyan-bg);border-color:var(--cyan);color:var(--cyan)}
+.checks{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.ck{display:flex;gap:10px;align-items:center;font-size:14px;padding:7px 10px;border-radius:8px;background:var(--bg2)}
+.ck .i{width:22px;height:22px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
+.ck.ok .i{background:var(--cyan-bg);color:var(--cyan)}
+.ck.bad .i{background:var(--orange-bg);color:var(--orange)}
+.ck.skip{opacity:.4}
+.ck .v{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--muted)}
+.verdict{margin-top:12px;padding:14px 16px;border-radius:10px;font-size:15px}
+.verdict.ok{background:var(--cyan-bg);border:1px solid var(--cyan)}
+.verdict.bad{background:var(--orange-bg);border:1px solid var(--orange)}
+.decoded{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;font-family:var(--mono);font-size:13px;margin-top:10px}
+.decoded span:nth-child(odd){color:var(--faint)}
+
+/* reconciler card (sim) */
+.recon{padding:10px 12px;border-radius:10px;background:var(--panel2);border:1px solid var(--lav);display:flex;flex-direction:column;gap:6px}
+.recon .rh{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--lav)}
+.recon .rh span:last-child{letter-spacing:0;color:var(--muted)}
+.recon .rl{font-family:var(--mono);font-size:11.5px;color:var(--muted);line-height:1.5}
+.recon .rl b{color:var(--text);font-weight:500}
+.recon .rl .lw{color:var(--orange)}
+.cb.danger{border-color:var(--orange);color:var(--orange-lt)}
+.cb.danger.on{background:var(--orange-bg)}
+/* lost-whole section */
+.gap2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.gapc{padding:22px;border-radius:14px;border:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;gap:10px}
+.gapc.bad{border-color:var(--orange)}
+.gapc h3{font-family:var(--serif);font-size:28px;line-height:1.1}
+.gapc p{margin:0;color:var(--muted);font-size:15px}
+.gapc .tag{font-family:var(--mono);font-size:12px;letter-spacing:.1em}
+.flow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-top:22px;position:relative}
+.fstep{padding:20px;border-radius:14px;background:var(--panel);border:1px solid var(--line);display:flex;flex-direction:column;gap:8px;position:relative}
+.fstep .n{font-family:var(--serif);font-size:40px;line-height:1;color:var(--lav)}
+.fstep h4{margin:0;font-size:17px;font-weight:600}
+.fstep p{margin:0;font-size:14px;color:var(--muted)}
+.fstep code{font-size:12.5px;color:var(--text)}
+.fstep:not(:last-child)::after{content:'→';position:absolute;right:-13px;top:28px;color:var(--lav);font-size:18px}
+.mirror{margin-top:18px;padding:18px 20px;border-radius:12px;background:var(--deep);border:1px solid var(--line);font-family:var(--mono);font-size:14px;display:grid;grid-template-columns:auto 1fr;gap:6px 16px;align-items:center}
+.mirror span:nth-child(odd){color:var(--faint);font-size:12px;letter-spacing:.08em}
+.mirror .dim{color:var(--faint)}
+.mirror span{overflow-wrap:anywhere;min-width:0}
+.snap .sh span{overflow-wrap:anywhere;min-width:0}
+.snap{margin-top:22px;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.snap .sh{padding:12px 16px;background:var(--panel2);font-family:var(--mono);font-size:13px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.snap table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:13px}
+.snap th{text-align:left;font-weight:500;color:var(--faint);font-size:11px;letter-spacing:.08em;padding:10px 14px;border-bottom:1px solid var(--line)}
+.snap td{padding:10px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
+.snap tr:last-child td{border-bottom:0}
+.snap td.nm{white-space:normal;word-break:break-all}
+.vd{display:inline-block;padding:3px 9px;border-radius:999px;font-size:12px;border:1px solid var(--line2);color:var(--muted)}
+.vd.ok{border-color:var(--cyan);color:var(--cyan);background:var(--cyan-bg)}
+.vd.miss{border-color:var(--orange);color:var(--orange-lt);background:var(--orange-bg);font-weight:600}
+.vd.info{border-color:var(--lav);color:#D6CCFA}
+.lwgrid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:18px;margin-top:22px;align-items:start}
+.lwgrid .card p{color:var(--muted);font-size:15px}
+.setrow{display:grid;grid-template-columns:auto 1fr;gap:8px 14px;font-size:14px;margin-top:10px;align-items:start}
+.setrow .vd{justify-self:start;white-space:nowrap}
+.setrow code{color:var(--cyan)}
+.setrow span{color:var(--muted)}
+
+/* anatomy: field sub-labels and subsections */
+.sublabels{margin:0 0 6px}
+.sl{grid-column:span 1;background:none;border:0;border-bottom:2px solid var(--line2);padding:2px 1px 6px;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;overflow:visible;display:flex;justify-content:center;color:var(--text);min-height:0}
+.sl.end{justify-content:flex-end}.sl.start{justify-content:flex-start}
+.sl.loc{border-bottom-color:var(--cyan);color:var(--cyan)}
+.sl.ver{border-bottom-color:var(--orange);color:var(--orange)}
+.sl.id{border-bottom-color:#C9D1E0}
+.sl.act{background:rgba(255,255,255,.06);border-radius:4px 4px 0 0}
+.sl .short{display:none}
+.groups{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin-top:40px;align-items:start}
+.grp{display:flex;flex-direction:column;gap:12px}
+.grp-h{padding-bottom:12px;border-bottom:2px solid;display:flex;flex-direction:column;gap:4px}
+.grp-h .gl{display:flex;justify-content:space-between;font-family:var(--mono);font-size:13px;letter-spacing:.12em;font-weight:600}
+.grp-h .gl span:last-child{color:var(--faint);letter-spacing:0;font-weight:400}
+.grp-h .gq{font-family:var(--serif);font-size:28px;line-height:1.1}
+.fsub{text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;cursor:pointer;display:flex;flex-direction:column;gap:6px;transition:border-color .15s}
+.fsub:hover,.fsub.act{border-color:var(--orange)}
+.fsub .fh{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.fsub .fh b{font-family:var(--mono);font-size:17px}
+.fsub .fh span{font-family:var(--mono);font-size:11.5px;padding:2px 7px;border-radius:4px;border:1px solid var(--line2);color:var(--muted);white-space:nowrap}
+.fsub .fw{font-size:15px;color:var(--text)}
+.fsub dl{margin:2px 0 0;display:flex;flex-direction:column;gap:8px}
+.fsub dt{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.fsub dd{margin:2px 0 0;font-size:14px;line-height:1.55;color:var(--muted)}
+.fsub dd code{color:var(--text);font-size:12.5px}
+.fsub dd b{color:var(--text);font-weight:600}
+
+/* manifest */
+.mgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
+.chunks{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:6px;margin-top:12px}
+.chk{height:52px;border-radius:8px;border:1px dashed var(--orange);background:var(--orange-bg);color:var(--orange);font-family:var(--mono);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:15px;font-weight:600}
+.chk small{font-size:9.5px;font-weight:400;color:var(--orange-lt)}
+.chk.on{border:1px solid var(--cyan);background:var(--cyan-bg);color:var(--cyan)}
+.chk.on small{color:var(--muted)}
+.toggle{display:flex;gap:10px;align-items:center;margin-top:14px;font-size:14px;color:var(--muted);cursor:pointer}
+.toggle input{width:18px;height:18px;accent-color:var(--cyan)}
+.hex{font-family:var(--mono);font-size:13px;display:flex;flex-direction:column;gap:5px;margin-top:10px}
+.hexrow{display:grid;grid-template-columns:44px repeat(16,minmax(0,1fr)) 140px;gap:3px;align-items:center}
+.hexrow .o{color:var(--faint);font-size:11px}
+.hexrow .a{color:var(--muted);padding-left:10px;letter-spacing:.06em;white-space:pre}
+.hb{height:28px;display:flex;align-items:center;justify-content:center;border-radius:4px;border:1px solid var(--line2);background:#232C42;font-size:12px;font-weight:600}
+.hb.res{background:var(--panel);color:#6F7A92;border-color:var(--line)}
+.hb.sz{background:var(--cyan-bg);border-color:var(--cyan);color:#9FDFF3}
+.hb.crc{background:var(--orange-bg);border-color:var(--orange);color:var(--orange-lt)}
+.hb.nm{background:var(--lav-bg);border-color:var(--lav);color:#D6CCFA}
+.hb.bm{background:#F5F8FC;border-color:#F5F8FC;color:#0C111D}
+.hb.pulse{animation:pulse .6s}
+@keyframes pulse{0%{transform:scale(1.25)}100%{transform:scale(1)}}
+.mstat{margin-top:14px;padding:14px 16px;border-radius:10px;background:var(--bg2);border:1px solid var(--line);font-size:15px}
+.mstat b{font-family:var(--mono);color:var(--orange);font-weight:500}
+.mstat.done{border-color:var(--cyan)}
+.mstat.done b{color:var(--cyan)}
+
+/* converge */
+.conv{display:grid;grid-template-columns:360px minmax(0,1fr);gap:18px}
+.formula{font-family:var(--mono);font-size:22px;padding:18px;background:var(--deep);border-radius:12px;text-align:center;margin:10px 0 18px}
+#convChart{width:100%;height:320px;display:block}
+.bigs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:18px}
+.bigs div{padding:12px;background:var(--bg2);border-radius:10px}
+.bigs b{display:block;font-family:var(--serif);font-weight:400;font-size:36px;line-height:1;color:var(--cyan)}
+.bigs span{font-size:12px;color:var(--muted)}
+
+/* features */
+.feat{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.feat .card h4{margin:10px 0 6px;font-size:18px;font-weight:600}
+.feat .card p{margin:0;color:var(--muted);font-size:15px}
+.feat svg{width:30px;height:30px;stroke:var(--cyan);fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.modes{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-top:16px}
+.mode{padding:16px;border-radius:12px;background:var(--bg2);border:1px solid var(--line)}
+.mode code{color:var(--cyan);font-size:13px}
+.mode p{margin:6px 0 0;font-size:14px;color:var(--muted)}
+
+footer.site{margin-top:100px;border-top:1px solid var(--line);padding:40px 0 60px}
+footer.site .wrap{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap;align-items:center;color:var(--muted);font-size:14px}
+
+.reveal{opacity:0;transform:translateY(18px);transition:opacity .7s ease,transform .7s ease}
+.reveal.in{opacity:1;transform:none}
+@media (prefers-reduced-motion: reduce){.reveal{opacity:1;transform:none;transition:none}html{scroll-behavior:auto}}
+
+@media (max-width:1100px){
+  .sim-top{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .linkpane{grid-column:1 / -1;order:-1}
+  #lane{min-height:300px}
+  .stats{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .controls{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .anat,.mgrid,.conv,.groups,.lwgrid{grid-template-columns:minmax(0,1fr)}
+  .flow{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .fstep::after{display:none}
+  .modes{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .feat{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+}
+@media (max-width:720px){
+  .wrap{padding:0 16px}
+  nav.top .links a:not(.gh){display:none}
+  .sim{padding:12px}
+  .sim-top,.sim-bottom,.links3,.why,.feat,.controls,.gap2,.flow{grid-template-columns:minmax(0,1fr)}
+  .snap{overflow-x:auto}
+  .mirror{grid-template-columns:minmax(0,1fr)}
+  .bit{width:36px;height:40px}
+  .bitrow{gap:4px}
+  .card{padding:16px}
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .bytes,.ruler-groups{grid-template-columns:repeat(16,minmax(0,1fr))}
+  .rg{grid-column:span 16 !important}
+  .sl{font-size:10px}
+  .sl .full{display:none}
+  .sl .short{display:inline}
+  .hexrow{grid-template-columns:34px repeat(16,minmax(0,1fr))}
+  .hexrow .a{display:none}
+  .chunks{grid-template-columns:repeat(5,minmax(0,1fr))}
+  section{padding-top:72px}
+}
+
+/* ---------- refined dark: plain labels instead of spaced mono caps ---------- */
+.kicker{font-family:var(--sans);font-size:16px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--orange);display:flex;align-items:baseline;gap:12px}
+.kicker .kn{font-family:var(--serif);font-style:italic;font-size:22px;color:var(--orange)}
+.kicker.plain{color:var(--muted);font-weight:400}
+.pane h3{font-family:var(--sans);font-size:15px;font-weight:600;letter-spacing:0;color:var(--text)}
+.pane h3 i{font-style:normal;font-weight:400;color:var(--cyan);margin-left:4px}
+.pane h3 .st{font-family:var(--mono);font-size:12px;font-weight:400}
+.lbl{font-family:var(--sans);font-size:13px;letter-spacing:0;text-transform:none;font-weight:500;color:var(--muted)}
+.stat span{font-size:13px;letter-spacing:0;text-transform:none}
+.stat span::first-letter{text-transform:uppercase}
+.log .hd,.term .hd{font-family:var(--sans);font-size:13px;letter-spacing:0}
+.log .hd span:first-child,.term .hd span:first-child{color:var(--text);font-weight:600}
+.rg .l{font-family:var(--sans);font-size:15px;font-weight:600;letter-spacing:0}
+.recon .rh{font-family:var(--sans);font-size:13px;font-weight:600;letter-spacing:0}
+.recon .rh span:last-child{font-family:var(--mono);font-weight:400;font-size:12px}
+.gapc .tag{font-family:var(--sans);font-size:14px;font-weight:600;letter-spacing:0}
+.mirror span:nth-child(odd){font-family:var(--sans);font-size:13px;letter-spacing:0}
+.snap th{font-family:var(--mono);font-size:12px;letter-spacing:0}
+.grp-h .gl{font-family:var(--sans);font-size:15px;letter-spacing:0}
+.grp-h .gl span:last-child{font-family:var(--mono);font-size:12px}
+.fsub dt{font-family:var(--sans);font-size:13px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<nav class="top" aria-label="Main">
+  <div class="wrap">
+    <a class="brand" href="#top">
+      <svg width="30" height="27" viewBox="0 0 40 36" aria-hidden="true"><path d="M3 14 Q3 3 20 3 Q37 3 37 14 Q33 11 28.5 14 Q24.5 11 20 14 Q15.5 11 11.5 14 Q7 11 3 14 Z" fill="#FF8A3D"/><path d="M3 14 L18 28 M11.5 14 L19 28 M28.5 14 L21 28 M37 14 L22 28" stroke="#EEF1F7" stroke-width="1.3" fill="none"/><rect x="16.5" y="28" width="7" height="5.5" rx="1" fill="#5CC8EA"/></svg>
+      parachuter
+    </a>
+    <div class="links">
+      <a href="#problem">Problem</a>
+      <a href="#simulator">Live simulator</a>
+      <a href="#packet">Packet</a>
+      <a href="#manifest">Manifest</a>
+      <a href="#lostwhole">Lost whole</a>
+      <a href="#converge">Math</a>
+      <a class="gh" href="https://github.com/emaadparacha/parachuter" target="_blank" rel="noopener">GitHub ↗</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <canvas id="sky" aria-hidden="true"></canvas>
+  <div class="wrap">
+    <div class="kicker plain">A Rust crate and command-line tool, first flown on the SuperBIT balloon telescope</div>
+    <h1>parachuter</h1>
+    <p class="tag">Reliable, rate-limited file downlink over <em>lossy, one-way</em> UDP links. Every byte comes down, and nothing is sent twice unless it was lost.</p>
+    <div class="cta">
+      <a class="btn primary" href="#simulator">Watch it work, live ↓</a>
+      <button class="btn copy" type="button" data-copy="cargo install parachuter"><span class="d">$</span> cargo install parachuter <span class="c-muted" aria-hidden="true">⧉</span></button>
+    </div>
+    <div class="hero-stats">
+      <div class="hs"><b>32 B</b><span>header on every packet</span></div>
+      <div class="hs"><b>1 bit</b><span>per chunk to track a file</span></div>
+      <div class="hs"><b>+25%</b><span>airtime at 20% packet loss</span></div>
+      <div class="hs"><b style="color:var(--orange)">0</b><span>restarts to retune a link</span></div>
+    </div>
+  </div>
+</header>
+
+<main>
+<!-- PROBLEM -->
+<section id="problem">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="kicker"><span class="kn">§ 1</span>The problem</div>
+      <h2 class="h2">The sky is a terrible network.</h2>
+      <p class="lede">A stratospheric balloon telescope produces multi-gigabyte science images. The data comes down through a NASA TDRS relay satellite on a high-gain link that is narrow and lossy, and the uplink budget goes to commands and telemetry, so the ground can't acknowledge every packet the way TCP needs.</p>
+    </div>
+    <div class="links3 reveal">
+      <div class="lk"><div class="rate">1000 kbps</div><div class="nm">TDRSS High Gain (Fastest)</div><p>The top data rate on the high-gain link.</p></div>
+      <div class="lk"><div class="rate">500 kbps</div><div class="nm">TDRSS High Gain (Fast)</div><p>Half the top rate.</p></div>
+      <div class="lk"><div class="rate">100 kbps</div><div class="nm">TDRSS High Gain (Slow)</div><p>One tenth of the top rate.</p></div>
+    </div>
+    <div class="why reveal">
+      <div><b>Fire and forget.</b>The sender streams every chunk once, blind. It can't wait for acknowledgements that may never come.</div>
+      <div><b>Track, don't trust.</b>The ground keeps one bit per chunk and knows exactly what is missing, even after a power cut.</div>
+      <div><b>Ask for the gaps.</b>A low-rate side channel requests only the missing chunk ranges. Nothing that arrived is ever sent again.</div>
+    </div>
+  </div>
+</section>
+
+<!-- SIMULATOR -->
+<section id="simulator">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="kicker"><span class="kn">§ 2</span>Live simulator</div>
+      <h2 class="h2">Break the link. Watch it recover.</h2>
+      <p class="lede">A faithful model of the real daemons: the sender's queue, a lossy link, the ground's bitmap, and the cleaner asking for exactly what's missing. Change the loss, switch the TDRSS High Gain rate, corrupt a packet, or type <code>ctl</code> commands in the terminal. Timings are compressed so a pass takes seconds, not minutes.</p>
+    </div>
+
+    <div class="sim reveal" id="sim">
+      <div class="sim-top">
+        <div class="pane" aria-label="Sender">
+          <h3><span>Sender <i>· flight</i></span> <span class="st" id="sState">auto</span></h3>
+          <div class="lbl">Queue (front first)</div>
+          <div class="queue" id="queue"></div>
+          <div class="lbl">Priority folders (walked top first)</div>
+          <div class="folders" id="folders"></div>
+        </div>
+        <div class="pane linkpane" aria-label="The link">
+          <canvas id="lane"></canvas>
+          <div class="linkinfo"><span class="pill"><b id="lName">TDRSS High Gain (Slow)</b></span><span class="pill"><b id="lRate">100</b> kbps</span><span class="pill">loss <b id="lLoss">10%</b></span></div>
+        </div>
+        <div class="pane ground" aria-label="Ground station">
+          <h3><span>Receiver <i>· ground</i></span> <span class="st" id="cleanerNext">cleaner in 2.5s</span></h3>
+          <div class="recon" aria-live="polite"><div class="rh"><span>Reconciler</span><span id="reconNext">next in 18s</span></div><div class="rl" id="reconLast">waiting for the first ledger snapshot to come down</div></div>
+          <div id="gfiles" style="display:flex;flex-direction:column;gap:10px"></div>
+          <div class="lbl">downloads/</div>
+          <div id="landed" style="display:flex;flex-direction:column;gap:4px"><span class="hint">nothing yet</span></div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="cg">
+          <button class="cb big on" id="play" type="button">❚❚ Pause</button>
+          <button class="cb" id="reset" type="button">↺ Reset</button>
+        </div>
+        <div class="slider"><label for="loss">Packet loss <b id="lossV">10%</b></label><input id="loss" type="range" min="0" max="80" value="10"></div>
+        <div class="slider"><label for="speed">Simulation speed <b id="speedV">0.5×</b></label><input id="speed" type="range" min="0" max="4" step="1" value="0"></div>
+        <div class="cg" role="group" aria-label="TDRSS High Gain data rate">
+          <button class="cb" data-link="hg-fastest" type="button" title="TDRSS High Gain (Fastest), 1000 kbps">Fastest · 1000</button>
+          <button class="cb" data-link="hg-fast" type="button" title="TDRSS High Gain (Fast), 500 kbps">Fast · 500</button>
+          <button class="cb on" data-link="hg-slow" type="button" title="TDRSS High Gain (Slow), 100 kbps">Slow · 100</button>
+        </div>
+      </div>
+      <div class="cg">
+        <button class="cb" id="addSci" type="button">+ Science frame</button>
+        <button class="cb" id="addCal" type="button">+ Calibration frame</button>
+        <button class="cb" id="addUrgent" type="button">Urgent file (--interrupt)</button>
+        <button class="cb warn" id="corrupt" type="button">Flip a bit in the next packet</button>
+        <button class="cb" id="cleanNow" type="button">Run cleaner now</button>
+        <button class="cb danger" id="blackout" type="button" aria-pressed="false" title="Take the link down, then bring it back">Start blackout</button>
+        <button class="cb" id="reconNow" type="button">Reconcile now</button>
+        <button class="cb warn" id="pauseSender" type="button">Pause sender</button>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><b id="stT">0.0s</b><span>sim time</span></div>
+        <div class="stat"><b id="stSent">0</b><span>packets sent</span></div>
+        <div class="stat"><b id="stLost" class="c-orange">0</b><span>lost on link</span></div>
+        <div class="stat"><b id="stCrc" class="c-red">0</b><span>CRC rejects</span></div>
+        <div class="stat"><b id="stRe" class="c-orange">0</b><span>retransmits</span></div>
+        <div class="stat"><b id="stWhole" style="color:var(--lav)">0</b><span>recovered whole</span></div>
+        <div class="stat"><b id="stOver">0%</b><span>extra airtime</span></div>
+        <div class="stat"><b id="stDone" class="c-cyan">0</b><span>files landed</span></div>
+      </div>
+
+      <div class="sim-bottom">
+        <div class="log"><div class="hd"><span>Event log</span><span>newest first</span></div><ol id="log" aria-live="polite"></ol></div>
+        <div class="term"><div class="hd"><span>Operator terminal</span><span>try: ctl status · help</span></div>
+          <div class="out" id="tout">parachuter ctl, connected to the simulated sender.
+Type <span class="c-cyan">help</span> for commands.</div>
+          <form id="tform" autocomplete="off"><span>$</span><label for="tin" class="sr" style="position:absolute;left:-9999px">Command</label><input id="tin" spellcheck="false" placeholder="ctl set-link --link hg-slow"></form>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PACKET -->
+<section id="packet">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="kicker"><span class="kn">§ 3</span>Anatomy of a packet</div>
+      <h2 class="h2">32 bytes that answer three questions.</h2>
+      <p class="lede">This is a real parachuter packet, encoded byte for byte with a real CRC-32. Hover a byte to learn what it's for. Click one, then flip its bits, and watch the receiver's checks catch the damage. Below, every field is broken out: what it is, how it's set, and how it can differ.</p>
+    </div>
+    <div class="reveal">
+      <div class="ruler-groups">
+        <div class="rg" style="grid-column:span 8"><div class="l"><span style="color:#C9D1E0">Identify</span><span>is it ours?</span></div><div class="b" style="border-color:#C9D1E0"></div></div>
+        <div class="rg" style="grid-column:span 16"><div class="l"><span class="c-cyan">Locate</span><span>where does it go?</span></div><div class="b" style="border-color:var(--cyan)"></div></div>
+        <div class="rg" style="grid-column:span 8"><div class="l"><span class="c-orange">Verify</span><span>is it intact?</span></div><div class="b" style="border-color:var(--orange)"></div></div>
+      </div>
+      <div class="bytes sublabels" id="subl"></div>
+      <div class="bytes" id="hdrBytes"></div>
+      <div class="lbl" style="margin:14px 0 6px;text-transform:none">Payload · 32 of up to 16,160 bytes shown · bzip2-compressed FITS data</div>
+      <div class="bytes" id="plBytes"></div>
+    </div>
+    <div class="anat reveal">
+      <div class="card fieldinfo" id="finfo" aria-live="polite"></div>
+      <div class="card">
+        <h3>What the receiver checks</h3>
+        <div class="checks" id="checks"></div>
+        <div class="verdict" id="verdict"></div>
+        <div class="cg" style="margin-top:14px">
+          <button class="cb warn" id="randFlip" type="button">Cosmic ray: flip a random bit</button>
+          <button class="cb" id="pktReset" type="button">↺ Restore packet</button>
+        </div>
+      </div>
+    </div>
+    <div class="groups reveal" id="groups" aria-label="Every header field, explained"></div>
+  </div>
+</section>
+
+<!-- MANIFEST -->
+<section id="manifest">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="kicker"><span class="kn">§ 4</span>The manifest</div>
+      <h2 class="h2">One bit per chunk: the ground's to-do list.</h2>
+      <p class="lede">For every file in flight the ground keeps <code>117.incoming</code> (the bytes, each chunk written at its offset) and <code>117.parmanifest</code> (the bookkeeping). Click chunks to "receive" them and watch the real manifest bytes change.</p>
+    </div>
+    <div class="mgrid reveal">
+      <div class="card">
+        <h3>m31_0142.fits.bz2 · 20 chunks</h3>
+        <div class="hint">Click a chunk to mark it received or lost.</div>
+        <div class="chunks" id="chunks"></div>
+        <label class="toggle"><input type="checkbox" id="nameIn" checked> The filename packet has arrived</label>
+        <div class="cg" style="margin-top:14px">
+          <button class="cb" id="mAll" type="button">Receive all</button>
+          <button class="cb" id="mRand" type="button">Random 20% loss</button>
+          <button class="cb" id="mNone" type="button">Clear</button>
+        </div>
+        <div class="mstat" id="mstat"></div>
+      </div>
+      <div class="card">
+        <h3><code style="font-family:var(--mono);font-size:22px">$ xxd 117.parmanifest</code></h3>
+        <div class="hex" id="hex"></div>
+        <div class="decoded" id="mdec"></div>
+        <p class="hint" style="margin-top:12px">Chunk <i>n</i> lives in bitmap byte <code>n ÷ 8</code>, bit <code>n mod 8</code>, lowest bit first. Each update is written to a temp file and renamed over the old one, so a crash leaves the old or the new manifest, never half of one.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- LOST WHOLE -->
+<section id="lostwhole">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="kicker"><span class="kn">§ 5</span>Files lost whole · new in v0.2</div>
+      <h2 class="h2">When an outage swallows a whole file.</h2>
+      <p class="lede">The cleaner repairs files the ground knows about. But if every packet of a file is lost, the ground never learns it existed, while the payload's ledger says it was sent. Reconciliation closes that gap with no acknowledgements from the ground.</p>
+    </div>
+    <div class="gap2 reveal">
+      <div class="gapc"><span class="tag c-cyan">Outage cuts through a file</span><h3>The cleaner repairs it.</h3><p>At least one packet landed, so the ground has a manifest and knows the file's size. The outage is just one long gap in the bitmap, requested in a single range once the link is back.</p></div>
+      <div class="gapc bad"><span class="tag c-orange">Outage swallows every packet</span><h3>Nobody notices. Until now.</h3><p>No packet landed, so there's no manifest and nothing for the cleaner to chase. The sender already marked the file as sent and never picks it up again. The same happens to files still queued when the sender restarts.</p></div>
+    </div>
+    <div class="flow reveal">
+      <div class="fstep"><span class="n">1</span><h4>The payload downlinks its ledger</h4><p>Every 6 h the sender writes <code>files_sent_list_&lt;time&gt;.csv</code> into its first priority folder, so it goes down like any other file: every path, size and <code>queued_at</code>.</p></div>
+      <div class="fstep"><span class="n">2</span><h4>Files land at their payload path</h4><p>Each file lands at <code>final_dir</code> + its full path, and only once it is complete. The folder <i>is</i> the ground's record; no extra log.</p></div>
+      <div class="fstep"><span class="n">3</span><h4>The cleaner compares</h4><p>Every 6 h it reads the newest snapshot and checks each file: landed with the right size, still in flight, still queued, or queued under 3 h ago.</p></div>
+      <div class="fstep"><span class="n">4</span><h4>Lost files go again</h4><p>Anything else was lost whole: it is requested in full, at the back of the queue, at most once per cycle, until it lands.</p></div>
+    </div>
+    <div class="mirror reveal">
+      <span>On the payload</span><span>/data/qsc/science/m31_002.fits.bz2</span>
+      <span>On the ground</span><span><span class="dim">/downloaded_files</span>/data/qsc/science/m31_002.fits.bz2</span>
+    </div>
+    <div class="snap reveal">
+      <div class="sh"><span>downloaded_files/…/status_dumps/files_sent_list_1790376000.csv</span><span class="c-lav">reconciler verdict →</span></div>
+      <table>
+        <thead><tr><th>file_id</th><th>file_name</th><th>size</th><th>queued_at</th><th>verdict</th></tr></thead>
+        <tbody>
+          <tr><td>117</td><td class="nm">/data/qsc/science/m31_001.fits.bz2</td><td>5,242,880</td><td>09:12</td><td><span class="vd ok">complete</span></td></tr>
+          <tr><td>118</td><td class="nm">/data/qsc/science/m31_002.fits.bz2</td><td>5,242,880</td><td>09:40</td><td><span class="vd miss">lost whole → resend</span></td></tr>
+          <tr><td>119</td><td class="nm">/data/qsc/dark/dark_0007.fits.bz2</td><td>2,097,152</td><td>10:05</td><td><span class="vd info">in flight</span></td></tr>
+          <tr><td>120</td><td class="nm">/data/qsc/flat/flat_0012.fits.bz2</td><td>2,097,152</td><td>13:58</td><td><span class="vd">still queued</span></td></tr>
+          <tr><td>121</td><td class="nm">/data/qsc/science/m31_003.fits.bz2</td><td>5,242,880</td><td>14:51</td><td><span class="vd">too recent (&lt; 3 h)</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="lwgrid reveal">
+      <div class="card">
+        <h3>Every verdict</h3>
+        <div class="setrow">
+          <span class="vd ok">complete</span><span>At its mirrored path with the ledger's size.</span>
+          <span class="vd info">in flight</span><span>Partial, in <code>holding/</code>; the cleaner is chasing its gaps. Flagged if stuck longer than the grace period.</span>
+          <span class="vd">still queued</span><span>Waiting in the sender's live queue.</span>
+          <span class="vd">too recent</span><span>Queued less than 3 h ago; give it time.</span>
+          <span class="vd">gone on payload</span><span>Never arrived and deleted on the payload: reported, can't be resent.</span>
+          <span class="vd">size mismatch</span><span>Landed, but not at the ledger's size: reported, not resent.</span>
+          <span class="vd miss">lost whole</span><span>Requested again in full, at the back of the queue.</span>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Settings</h3>
+        <div class="setrow">
+          <code>status_dump_period_secs</code><span>21600 · ledger snapshot (payload)</span>
+          <code>reconcile_period_secs</code><span>21600 · how often to compare (ground)</span>
+          <code>reconcile_grace_secs</code><span>10800 · wait before calling a file lost</span>
+          <code>ctl reconcile-run</code><span>compare right now</span>
+        </div>
+        <p style="margin-top:14px">Worst case with the defaults, a lost file is requested again about 12 h after it was lost: up to 6 h until the next ledger snapshot, then up to 6 h until the next pass. Shorten both periods to find out sooner.</p>
+        <button class="btn primary" id="tryLost" type="button" style="margin-top:6px">Try it in the simulator ↑</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CONVERGE -->
+<section id="converge">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="kicker"><span class="kn">§ 6</span>Why it converges</div>
+      <h2 class="h2">Each pass shrinks the gap by the loss rate.</h2>
+    </div>
+    <div class="conv reveal">
+      <div class="card">
+        <div class="formula">missing(k) ≈ N × p<sup>k</sup></div>
+        <div class="slider"><label for="cp">Loss rate p <b id="cpV">20%</b></label><input id="cp" type="range" min="1" max="80" value="20"></div>
+        <div class="slider" style="margin-top:10px"><label for="cn">Chunks N <b id="cnV">775</b></label><input id="cn" type="range" min="1" max="6" step="0.01" value="2.889"></div>
+        <div class="bigs">
+          <div><b id="cPasses">5</b><span>passes to finish</span></div>
+          <div><b id="cOver">+25%</b><span>extra airtime</span></div>
+          <div><b id="cFirst">155</b><span>missing after pass 1</span></div>
+        </div>
+        <p class="hint" style="margin-top:14px">Extra airtime ≈ p ÷ (1 − p): every chunk costs about one send, plus re-sends only for what was lost. The live demo measured +25.4% at 20% loss.</p>
+      </div>
+      <div class="card"><svg id="convChart" role="img" aria-label="Chunks still missing after each pass"></svg></div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section id="more">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="kicker"><span class="kn">§ 7</span>Built for a flight you can't go and fix</div>
+      <h2 class="h2">One binary. Five modes. No restarts.</h2>
+    </div>
+    <div class="feat reveal">
+      <div class="card"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg><h4>Checked twice</h4><p>CRC-32 on every packet and every manifest header. A damaged packet is treated exactly like a lost one.</p></div>
+      <div class="card"><svg viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.3 6.3a8 8 0 1 0 11.4 0"/></svg><h4>Power-cut proof</h4><p>Chunks are synced to disk before their bit is set, and manifests are replaced atomically. Restart and it resumes mid-file.</p></div>
+      <div class="card"><svg viewBox="0 0 24 24"><path d="M4 17a8 8 0 1 1 16 0"/><path d="M12 17l4-5"/><circle cx="12" cy="17" r="1.5"/></svg><h4>Retune anything, live</h4><p>Switch links, change the speed cap or chunk size, pause, or jump the queue over a Unix socket. The TOML config hot-reloads in about a second.</p></div>
+      <div class="card"><svg viewBox="0 0 24 24"><path d="M10 6h10M10 12h10M10 18h10"/><circle cx="5" cy="6" r="1.5"/><circle cx="5" cy="12" r="1.5"/><circle cx="5" cy="18" r="1.5"/></svg><h4>Science first</h4><p>Ordered priority folders decide what goes next, with a separate debug queue so testing never drains live data.</p></div>
+      <div class="card"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M8 8a5.6 5.6 0 0 0 0 8M16 8a5.6 5.6 0 0 1 0 8M5 5a10 10 0 0 0 0 14M19 5a10 10 0 0 1 0 14"/></svg><h4>Multicast-ready</h4><p>The receiver joins multicast groups by itself, so switching from a unicast to a relay link needs no ground changes.</p></div>
+      <div class="card"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/></svg><h4>Every file tracked</h4><p>A SQLite ledger records every file seen and sent, with CSV snapshots for the ground.</p></div>
+    </div>
+    <div class="modes reveal">
+      <div class="mode"><code>parachuter sender</code><p>Flight side. Watches folders, chunks, paces, sends.</p></div>
+      <div class="mode"><code>parachuter receiver</code><p>Ground. Validates, writes, finalises files.</p></div>
+      <div class="mode"><code>parachuter cleaner</code><p>Ground. Finds gaps, asks for retransmits.</p></div>
+      <div class="mode"><code>parachuter ctl</code><p>Operator. Pokes any daemon over its socket.</p></div>
+      <div class="mode"><code>parachuter monitor</code><p>Live table of every file in flight.</p></div>
+    </div>
+    <div class="cta reveal" style="margin-top:36px">
+      <button class="btn copy" type="button" data-copy="cargo install parachuter"><span class="d">$</span> cargo install parachuter <span class="c-muted" aria-hidden="true">⧉</span></button>
+      <button class="btn copy" type="button" data-copy="cargo add parachuter"><span class="d">$</span> cargo add parachuter <span class="c-muted" aria-hidden="true">⧉</span></button>
+      <a class="btn" href="https://crates.io/crates/parachuter" target="_blank" rel="noopener">crates.io ↗</a>
+      <a class="btn" href="https://docs.rs/parachuter" target="_blank" rel="noopener">docs.rs ↗</a>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <span>🪂 parachuter · Emaad Paracha · 2026</span>
+    <a href="https://github.com/emaadparacha/parachuter" target="_blank" rel="noopener">github.com/emaadparacha/parachuter</a>
+    <span>Free for non-commercial use</span>
+  </div>
+</footer>
+
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ------------------------------------------------------------ CRC-32 (IEEE, same as crc32fast) */
+const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(bytes) { let c = 0xFFFFFFFF; for (let i = 0; i < bytes.length; i++) c = CRC_T[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+const hex2 = b => b.toString(16).toUpperCase().padStart(2, '0');
+
+/* ------------------------------------------------------------ copy buttons */
+$$('[data-copy]').forEach(b => b.addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(b.dataset.copy); const o = b.innerHTML; b.innerHTML = '<span class="d">✓</span> copied'; setTimeout(() => b.innerHTML = o, 1200); } catch (e) {}
+}));
+
+/* ------------------------------------------------------------ reveal on scroll */
+const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { threshold: .08 });
+$$('.reveal').forEach(el => io.observe(el));
+
+/* ------------------------------------------------------------ hero sky: parachuting packets */
+(function sky() {
+  const cv = $('#sky'), cx = cv.getContext('2d');
+  let W, H, dpr, chutes = [], stars = [];
+  function size() {
+    dpr = Math.min(devicePixelRatio || 1, 2); W = cv.clientWidth; H = cv.clientHeight;
+    cv.width = W * dpr; cv.height = H * dpr; cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    stars = Array.from({ length: Math.round(W * H / 9000) }, () => ({ x: Math.random() * W, y: Math.random() * H, r: Math.random() * 1.2 + .3, a: Math.random() * .6 + .2 }));
+  }
+  function spawn(init) {
+    const s = Math.random() * .6 + .55;
+    return { x: W * .35 + Math.random() * W * .65, y: init ? Math.random() * H : -40, s, v: 18 + Math.random() * 26, sw: Math.random() * 6.28, lost: Math.random() < .2, life: 1, cut: H * (.3 + Math.random() * .5) };
+  }
+  function drawChute(c) {
+    const s = c.s * 22; cx.save(); cx.translate(c.x + Math.sin(c.sw) * 10, c.y); cx.globalAlpha = c.life * .7;
+    if (!c.lost || c.y < c.cut) {
+      cx.fillStyle = '#FF8A3D'; cx.beginPath(); cx.moveTo(-s, 0); cx.quadraticCurveTo(-s, -s * .9, 0, -s * .95); cx.quadraticCurveTo(s, -s * .9, s, 0);
+      for (let i = 4; i > 0; i--) { const x0 = -s + (2 * s) * i / 4, x1 = -s + (2 * s) * (i - 1) / 4; cx.quadraticCurveTo((x0 + x1) / 2, -s * .25, x1, 0); }
+      cx.fill();
+      cx.strokeStyle = 'rgba(238,241,247,.6)'; cx.lineWidth = 1; cx.beginPath();
+      [-1, -.4, .4, 1].forEach(k => { cx.moveTo(k * s, 0); cx.lineTo(k * s * .15, s * 1.05); }); cx.stroke();
+    }
+    cx.fillStyle = c.lost && c.y >= c.cut ? '#FF8A3D' : '#5CC8EA';
+    cx.fillRect(-s * .32, s * 1.05, s * .64, s * .5);
+    cx.restore();
+  }
+  let last = performance.now();
+  function frame(t) {
+    const dt = Math.min(.05, (t - last) / 1000); last = t;
+    cx.clearRect(0, 0, W, H);
+    for (const st of stars) { cx.globalAlpha = st.a; cx.fillStyle = '#EEF1F7'; cx.beginPath(); cx.arc(st.x, st.y, st.r, 0, 6.28); cx.fill(); }
+    cx.globalAlpha = 1;
+    cx.strokeStyle = 'rgba(38,49,74,.9)'; cx.beginPath(); cx.moveTo(0, H - 1); cx.lineTo(W, H - 1); cx.stroke();
+    for (const c of chutes) {
+      c.y += c.v * dt * (c.lost && c.y >= c.cut ? 3.2 : 1); c.sw += dt * .9;
+      if (c.lost && c.y >= c.cut) c.life -= dt * .9;
+      drawChute(c);
+      if (c.lost && c.y >= c.cut && c.life > .6) { cx.save(); cx.strokeStyle = '#FF8A3D'; cx.lineWidth = 2; cx.globalAlpha = c.life; const x = c.x + Math.sin(c.sw) * 10, y = c.y; cx.beginPath(); cx.moveTo(x - 6, y - 6); cx.lineTo(x + 6, y + 6); cx.moveTo(x + 6, y - 6); cx.lineTo(x - 6, y + 6); cx.stroke(); cx.restore(); }
+    }
+    chutes = chutes.filter(c => c.y < H + 40 && c.life > 0);
+    while (chutes.length < Math.max(8, W / 90)) chutes.push(spawn(false));
+    if (!reduceMotion) requestAnimationFrame(frame);
+  }
+  size(); addEventListener('resize', size);
+  chutes = Array.from({ length: Math.max(8, W / 90) }, () => spawn(true));
+  requestAnimationFrame(frame);
+})();
+
+/* ================================================================== SIMULATOR */
+const LINKS = { 'hg-fastest': { kbps: 1000, lat: 1.1, label: 'TDRSS High Gain (Fastest)' }, 'hg-fast': { kbps: 500, lat: 1.1, label: 'TDRSS High Gain (Fast)' }, 'hg-slow': { kbps: 100, lat: 1.1, label: 'TDRSS High Gain (Slow)' } };
+const CHUNK_B = 4096;                 // bytes per datagram in the sim
+const CLEAN_PERIOD = 2.5, DEDUP_TTL = 5, BUDGET = 8, RECHECK = .6;
+// Reconciliation, compressed: 6 h / 6 h / 3 h in production.
+const SNAP_PERIOD = 24, RECON_PERIOD = 18, RECON_GRACE = 12;
+const FOLDERS = ['sql_status', 'dark', 'flat', 'bias', 'science'];   // priority order, as in the sample config
+const FILE_COLORS = ['#5CC8EA', '#C9D1E0', '#B9A6F2', '#5EE0A0', '#F5C26B'];
+const SPEEDS = [.5, 1, 2, 4, 8];
+
+let S;           // sim state
+let nextId = 117;
+function freshState() {
+  nextId = 117;
+  return {
+    t: 0, playing: S ? S.playing : true, speed: S ? S.speed : .5, loss: S ? S.loss : .1,
+    link: 'hg-slow', kbpsOverride: null, state: 'auto', corruptNext: false,
+    queue: [], files: {}, pending: [], landedList: [],
+    flights: [], reqs: [], bursts: [], acc: 0, idleSince: 0, lastClean: 0,
+    dedup: new Map(), stats: { sent: 0, lost: 0, crc: 0, re: 0, pass: 0, needed: 0, done: 0, whole: 0 }, colorIx: 0,
+    ledger: [], lastSnap: 0, lastRecon: 0, recon: null, reqWhole: {}, blackout: null, blackoutNext: false, outage: false, outageT0: 0, outageLost: 0, outageFiles: null,
+  };
+}
+function kbps() { return S.kbpsOverride ?? LINKS[S.link].kbps; }
+function pps() { return kbps() * 1000 / 8 / CHUNK_B; }
+
+function newFile(name, n, folder) {
+  const f = { id: nextId++, name, n, folder, rec: new Uint8Array(n), fresh: new Uint8Array(n), nameKnown: false, onGround: false, done: false, color: FILE_COLORS[S.colorIx++ % FILE_COLORS.length], sentOnce: false };
+  S.files[f.id] = f; return f;
+}
+function addPending(name, n, folder, quiet) { const f = newFile(name, n, folder); S.pending.push(f); log(`new file in <b>${folder}/</b>: ${name} (${n} chunks)`, 'c-muted'); renderFolders(); return f; }
+function pushFull(f, front) {
+  const items = [{ k: 'M', f: f.id }, { k: 'D', f: f.id, s: 0, c: f.n }];
+  if (front) S.queue.unshift(...items); else S.queue.push(...items);
+  f.sentOnce = true; S.stats.needed += f.n + 1;
+  f.queuedAt = S.t; if (!S.ledger.includes(f.id)) S.ledger.push(f.id);   // ledger row + queued_at
+}
+/* ---- ledger snapshots (the sender writes one while idle, into sql_status/) */
+function maybeSnapshot() {
+  if (S.t - S.lastSnap < SNAP_PERIOD) return;
+  S.lastSnap = S.t;
+  const nm = `files_sent_list_${Math.round(S.t)}.csv`;
+  const f = newFile(nm, 2, 'sql_status');
+  f.snapT = S.t;
+  f.rows = S.ledger.map(id => { const x = S.files[id]; return { id, name: x.name, queuedAt: x.queuedAt }; });
+  S.pending.push(f);
+  log(`sender: wrote ledger snapshot <b>${nm}</b> (${f.rows.length} files) into sql_status/`, 'c-lav');
+  renderFolders();
+}
+/* ---- reconciler (ground) */
+function reconcilePass(manual) {
+  S.lastRecon = S.t;
+  const snap = S.landedList.filter(f => f.rows).sort((a, b) => b.snapT - a.snapT)[0];
+  if (!snap) { if (manual) log('reconciler: no ledger snapshot has landed yet', 'c-lav'); S.recon = { none: true }; return; }
+  const c = { complete: 0, inflight: 0, queued: 0, recent: 0, missing: 0, requested: 0 };
+  const lost = [];
+  for (const row of snap.rows) {
+    const f = S.files[row.id];
+    if (f.done) c.complete++;
+    else if (f.onGround) c.inflight++;
+    else if (S.queue.some(q => q.f === f.id)) c.queued++;
+    else if (S.t - row.queuedAt < RECON_GRACE) c.recent++;
+    else {
+      c.missing++;
+      const last = S.reqWhole[f.id];
+      if (last === undefined || S.t - last >= RECON_PERIOD) {
+        S.reqWhole[f.id] = S.t; f.lostWhole = true; c.requested++; lost.push(f.name);
+        S.reqs.push({ t0: S.t, dur: .9, req: { k: 'W', f } });
+      }
+    }
+  }
+  S.recon = { snap: snap.name, ...c };
+  const tail = `${c.complete} complete · ${c.inflight} in flight · ${c.queued} queued · ${c.recent} too recent`;
+  if (lost.length) log(`reconciler: ${snap.name} vs downloads/: <span class="c-orange">${lost.join(', ')} LOST WHOLE → requested again (back of the queue)</span> · ${tail}`, 'c-lav');
+  else log(`reconciler: ${snap.name} vs downloads/: nothing lost whole · ${tail}`, 'c-lav');
+}
+
+/* ---- sender */
+function scan() {
+  for (const folder of FOLDERS) {
+    const ix = S.pending.findIndex(f => f.folder === folder);
+    if (ix >= 0) {
+      const f = S.pending.splice(ix, 1)[0]; pushFull(f, false); log(`sender: queue empty, picked <b>${f.name}</b> from ${folder}/ (file ${f.id})`, 'c-cyan');
+      if (S.blackoutNext && !f.rows) { S.blackoutNext = false; S.blackout = f.id; syncBlackout(); log(`<span class="c-orange">blackout begins</span>: every packet is lost while <b>${f.name}</b> is sent`, 'c-orange'); }
+      renderFolders(); return true;
+    }
+  }
+  return false;
+}
+function popPacket() {
+  const it = S.queue[0]; if (!it) return null;
+  let p;
+  if (it.k === 'M') { S.queue.shift(); p = { k: 'M', f: it.f, re: !!it.re }; }
+  else { p = { k: it.k, f: it.f, ch: it.s }; it.s++; it.c--; if (it.c <= 0) S.queue.shift(); }
+  return p;
+}
+function sendPacket(p) {
+  const L = LINKS[S.link];
+  p.lost = S.outage || S.blackout !== null || Math.random() < S.loss;
+  if (S.outage) { S.outageLost++; S.outageFiles.add(p.f); }
+  if (S.blackout !== null && p.f === S.blackout && p.k === 'D' && p.ch === S.files[p.f].n - 1) {
+    const bf = S.files[S.blackout]; S.blackout = null; syncBlackout();
+    setTimeout(() => log(`blackout ends. The payload's ledger says <b>${bf.name}</b> was sent; the ground never saw a packet, so the cleaner can't know it exists`, 'c-orange'), 0);
+  }
+  p.corrupt = !p.lost && S.corruptNext; if (p.corrupt) S.corruptNext = false;
+  p.t0 = S.t; p.dur = L.lat; p.lostAt = .25 + Math.random() * .5; p.row = S.stats.sent % 5;
+  S.stats.sent++; if (p.k === 'R' || p.re) S.stats.re++;
+  if (p.lost) S.stats.lost++;
+  S.flights.push(p);
+}
+
+/* ---- receiver */
+function arrive(p) {
+  const f = S.files[p.f];
+  if (p.corrupt) { S.stats.crc++; log(`receiver: <span class="c-red">CRC mismatch</span> on file ${f.id} ${p.k === 'M' ? 'filename' : 'chunk ' + p.ch}: dropped, it will be re-requested`, 'c-red'); flashFile(f); return; }
+  if (!f.onGround) { f.onGround = true; buildGroundFile(f); log(`receiver: first packet of file ${f.id}, manifest created`, 'c-muted'); }
+  if (p.k === 'M') { if (!f.nameKnown) { f.nameKnown = true; log(`receiver: filename for ${f.id} is <b>${f.name}</b>`, 'c-lav'); } }
+  else { if (f.rec[p.ch]) return; f.rec[p.ch] = 1; if (p.k === 'R') f.fresh[p.ch] = 1; paintCell(f, p.ch); }
+  if (!f.done && f.nameKnown && f.rec.every(Boolean)) {
+    f.done = true; S.stats.done++; S.landedList.unshift(f);
+    log(`receiver: <span class="c-cyan">✓ ${f.name} complete</span>, moved to downloads/`, 'c-cyan');
+    if (f.lostWhole) { S.stats.whole++; log(`receiver: <span class="c-lav">✓ ${f.name} recovered after being lost whole</span>`, 'c-lav'); }
+    finishGroundFile(f); renderLanded();
+  }
+}
+
+/* ---- cleaner */
+function missingRanges(f) { const out = []; let i = 0; while (i < f.n) { if (!f.rec[i]) { const s = i; while (i < f.n && !f.rec[i]) i++; out.push([s, i - s]); } else i++; } return out; }
+function pendingOverlap(fid, s, c) { return S.queue.some(q => q.f === fid && q.k !== 'M' && s < q.s + q.c && q.s < s + c); }
+function cleanerPass(manual) {
+  S.stats.pass++; S.lastClean = S.t;
+  for (const f of Object.values(S.files)) f.fresh.fill(0);
+  const reqs = [];
+  for (const f of Object.values(S.files)) {
+    if (!f.onGround || f.done) continue;
+    if (!f.nameKnown && !S.queue.some(q => q.f === f.id && q.k === 'M')) reqs.push({ f, k: 'N' });
+    for (const [s, c] of missingRanges(f)) { if (!pendingOverlap(f.id, s, c)) reqs.push({ f, k: 'R', s, c }); }
+  }
+  let sent = 0, skippedTTL = 0; const asked = [];
+  for (const r of reqs) {
+    if (sent >= BUDGET) break;
+    const key = r.k === 'N' ? `${r.f.id}:name` : `${r.f.id}:${r.s}:${r.c}`;
+    const exp = S.dedup.get(key); if (exp && exp > S.t) { skippedTTL++; continue; }
+    S.dedup.set(key, S.t + DEDUP_TTL); sent++;
+    S.reqs.push({ t0: S.t, dur: .7, req: r });
+    asked.push(r.k === 'N' ? `${r.f.id}:name` : `${r.f.id}:${r.c > 1 ? r.s + '–' + (r.s + r.c - 1) : r.s}`);
+  }
+  const why = manual ? ' (manual)' : '';
+  if (asked.length) log(`cleaner pass${why}: asks for ${asked.join(', ')}${skippedTTL ? ` · ${skippedTTL} skipped (asked recently)` : ''}`, 'c-orange');
+  else if (manual || skippedTTL) log(`cleaner pass${why}: nothing new to ask${skippedTTL ? ` · ${skippedTTL} waiting out the 5 s memory` : ''}`, 'c-muted');
+}
+function deliverRequest(r) {
+  if (r.k === 'W') { pushFull(r.f, false); return; }
+  if (r.k === 'N') S.queue.unshift({ k: 'M', f: r.f.id, re: true });
+  else S.queue.unshift({ k: 'R', f: r.f.id, s: r.s, c: r.c });
+}
+
+/* ---- main loop */
+function step(dt) {
+  S.t += dt;
+  // sender
+  if (S.state !== 'paused') {
+    if (!S.queue.length) {
+      if (!S.idleSince) S.idleSince = S.t;
+      if (S.t - S.idleSince > RECHECK && S.state === 'auto') { maybeSnapshot(); scan(); S.idleSince = 0; }
+      S.acc = 0;
+    } else {
+      S.idleSince = 0; S.acc += dt * pps();
+      while (S.acc >= 1 && S.queue.length) { S.acc -= 1; const p = popPacket(); if (p) sendPacket(p); }
+    }
+  }
+  // flights
+  for (const p of S.flights) {
+    const u = (S.t - p.t0) / p.dur;
+    if (p.lost && u >= p.lostAt && !p.gone) { p.gone = true; S.bursts.push({ t0: S.t, u: p.lostAt, row: p.row }); }
+    if (!p.lost && u >= 1 && !p.done) { p.done = true; arrive(p); }
+  }
+  S.flights = S.flights.filter(p => !(p.gone || p.done));
+  for (const r of S.reqs) { if (!r.done && S.t - r.t0 >= r.dur) { r.done = true; deliverRequest(r.req); } }
+  S.reqs = S.reqs.filter(r => !r.done);
+  S.bursts = S.bursts.filter(b => S.t - b.t0 < .6);
+  // cleaner
+  if (S.t - S.lastClean >= CLEAN_PERIOD) cleanerPass(false);
+  if (S.t - S.lastRecon >= RECON_PERIOD) reconcilePass(false);
+}
+
+/* ---- lane rendering */
+const lane = $('#lane'), lx = lane.getContext('2d');
+let LW = 0, LH = 0;
+function sizeLane() { const d = Math.min(devicePixelRatio || 1, 2); LW = lane.clientWidth; LH = lane.clientHeight; lane.width = LW * d; lane.height = LH * d; lx.setTransform(d, 0, 0, d, 0, 0); }
+new ResizeObserver(sizeLane).observe(lane);
+function rr(x, y, w, h, r) { lx.beginPath(); lx.moveTo(x + r, y); lx.arcTo(x + w, y, x + w, y + h, r); lx.arcTo(x + w, y + h, x, y + h, r); lx.arcTo(x, y + h, x, y, r); lx.arcTo(x, y, x + w, y, r); lx.closePath(); }
+function drawLane() {
+  const W = LW, H = LH; if (!W) return;
+  lx.clearRect(0, 0, W, H);
+  const x0 = 26, x1 = W - 26, yData = H * .44, yCtl = H * .84;
+  // guides
+  lx.setLineDash([5, 6]); lx.lineWidth = 1.2;
+  lx.strokeStyle = 'rgba(92,200,234,.35)'; lx.beginPath(); lx.moveTo(x0, yData); lx.lineTo(x1, yData); lx.stroke();
+  lx.strokeStyle = 'rgba(255,138,61,.35)'; lx.beginPath(); lx.moveTo(x0, yCtl); lx.lineTo(x1, yCtl); lx.stroke();
+  lx.setLineDash([]);
+  lx.font = '12px "IBM Plex Mono", monospace'; lx.textBaseline = 'middle';
+  lx.fillStyle = '#8793AB'; lx.textAlign = 'left'; lx.fillText('flight', x0, 64); lx.textAlign = 'right'; lx.fillText('ground', x1, 64);
+  lx.textAlign = 'center'; lx.fillStyle = '#A6B0C4';
+  lx.fillText('UDP data: one-way, lossy  →', W / 2, yData - 92);
+  lx.fillStyle = '#FFB98A'; lx.fillText('←  retransmit requests (control channel)', W / 2, yCtl + 30);
+  // flights
+  for (const p of S.flights) {
+    const u = Math.min(1, (S.t - p.t0) / p.dur);
+    const x = x0 + (x1 - x0 - 34) * u, y = yData - 12 + (p.row - 2) * 30;
+    const f = S.files[p.f];
+    lx.globalAlpha = 1;
+    rr(x, y, 34, 24, 4);
+    if (p.k === 'R') { lx.fillStyle = '#3A2416'; lx.fill(); lx.strokeStyle = '#FF8A3D'; lx.lineWidth = 1.6; lx.stroke(); }
+    else { lx.fillStyle = '#16213A'; lx.fill(); lx.strokeStyle = f.color; lx.lineWidth = 1.6; if (p.k === 'M') lx.setLineDash([4, 3]); lx.stroke(); lx.setLineDash([]); }
+    if (p.corrupt) { lx.strokeStyle = '#FF5C6C'; lx.lineWidth = 2; lx.stroke(); }
+    lx.fillStyle = p.k === 'R' ? '#FFB98A' : (p.corrupt ? '#FF5C6C' : f.color);
+    lx.font = '600 11px "IBM Plex Mono", monospace'; lx.textAlign = 'center';
+    lx.fillText(p.k === 'M' ? 'name' : (p.k === 'R' ? 'R' : '') + p.ch, x + 17, y + 12.5);
+  }
+  for (const b of S.bursts) {
+    const k = (S.t - b.t0) / .6, x = x0 + (x1 - x0 - 34) * b.u + 17, y = yData + (b.row - 2) * 30;
+    lx.globalAlpha = 1 - k; lx.strokeStyle = '#FF8A3D'; lx.lineWidth = 2.4; const s = 7 + k * 8;
+    lx.beginPath(); lx.moveTo(x - s, y - s); lx.lineTo(x + s, y + s); lx.moveTo(x + s, y - s); lx.lineTo(x - s, y + s); lx.stroke();
+    lx.beginPath(); lx.arc(x, y, 6 + k * 18, 0, 6.28); lx.stroke();
+  }
+  lx.globalAlpha = 1;
+  for (const r of S.reqs) {
+    const u = Math.min(1, (S.t - r.t0) / r.dur), x = x1 - 70 - (x1 - x0 - 70) * u, y = yCtl - 10;
+    rr(x, y, 70, 20, 10); lx.fillStyle = '#3A2416'; lx.fill(); lx.strokeStyle = '#FF8A3D'; lx.lineWidth = 1.2; lx.stroke();
+    lx.fillStyle = '#FFB98A'; lx.font = '11px "IBM Plex Mono", monospace'; lx.textAlign = 'center';
+    const q = r.req; lx.fillText(q.k === 'W' ? `${q.f.id}:whole` : q.k === 'N' ? `${q.f.id}:name` : `${q.f.id}:${q.c > 1 ? q.s + '-' + (q.s + q.c - 1) : q.s}`, x + 35, y + 10.5);
+  }
+  // endpoints
+  lx.fillStyle = '#5CC8EA'; lx.beginPath(); lx.arc(x0, yData, 5, 0, 6.28); lx.fill(); lx.beginPath(); lx.arc(x1, yData, 5, 0, 6.28); lx.fill();
+  if (S.outage || S.blackout !== null) { lx.fillStyle = 'rgba(58,36,22,.35)'; lx.fillRect(0, 0, W, H); lx.fillStyle = '#FF8A3D'; lx.font = '600 15px "IBM Plex Sans", sans-serif'; lx.textAlign = 'center'; lx.fillText(S.outage ? `Blackout: every packet is lost (${(S.t - S.outageT0).toFixed(0)}s)` : 'Blackout: every packet of this file is lost', W / 2, 92); }
+  if (S.state === 'paused') { lx.fillStyle = 'rgba(12,17,29,.6)'; lx.fillRect(0, 0, W, H); lx.fillStyle = '#FF8A3D'; lx.font = '600 14px "IBM Plex Mono", monospace'; lx.textAlign = 'center'; lx.fillText('Sender paused · ctl set-state auto', W / 2, H / 2); }
+}
+
+/* ---- DOM rendering */
+function flashFile(f) { const el = $(`#gf-${f.id}`); if (el) { el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); } }
+function buildGroundFile(f) {
+  const d = document.createElement('div'); d.className = 'gfile'; d.id = 'gf-' + f.id;
+  d.innerHTML = `<div class="t"><span class="nm" style="color:${f.color}">${f.id} · <span class="fname">?</span></span><span class="pr">0/${f.n}</span></div><div class="bits">${'<i></i>'.repeat(f.n)}</div><div class="mf"><span>${f.id}.incoming · ${f.id}.parmanifest</span><span class="mis"></span></div>`;
+  $('#gfiles').prepend(d);
+}
+function paintCell(f, ch) { const el = $(`#gf-${f.id} .bits`); if (el) { const c = el.children[ch]; c.className = f.fresh[ch] ? 'on new' : 'on'; } }
+function finishGroundFile(f) { const el = $(`#gf-${f.id}`); if (!el) return; el.classList.add('done'); setTimeout(() => el.remove(), 1600); }
+function renderLanded() {
+  $('#landed').innerHTML = S.landedList.length ? S.landedList.map(f => `<div class="landed"><span>✓ ${f.name}</span><span class="${f.lostWhole ? 'c-lav' : 'c-muted'}">${f.lostWhole ? 'recovered whole' : f.n + ' chunks · identical'}</span></div>`).join('') : '<span class="hint">nothing yet</span>';
+}
+function renderFolders() {
+  $('#folders').innerHTML = FOLDERS.map((fd, i) => {
+    const items = Object.values(S.files).filter(f => f.folder === fd);
+    const shown = fd === 'sql_status' ? items.slice(-2) : items;
+    const more = items.length - shown.length;
+    const list = items.length ? (more ? `<span style="color:var(--faint)">+ ${more} older</span>` : '') + shown.map(f => `<span class="${f.sentOnce ? 'sent' : ''}">${f.name}</span>`).join('') : '<span class="c-muted" style="color:var(--faint)">empty</span>';
+    return `<div class="fd"><span class="n">${i + 1}. ${fd}/</span><div class="fl">${list}</div></div>`;
+  }).join('');
+}
+function renderQueue() {
+  const q = S.queue;
+  if (!q.length) { $('#queue').innerHTML = `<div class="hint">${S.state === 'paused' ? 'paused: queue was cleared' : 'empty: will check the folders'}</div>`; return; }
+  $('#queue').innerHTML = q.slice(0, 7).map((it, i) => {
+    const cls = it.k + (i === 0 ? ' head' : '');
+    const lab = it.k === 'M' ? `${it.f} filename` : it.k === 'R' ? `R ${it.f}:${it.c > 1 ? it.s + '–' + (it.s + it.c - 1) : it.s}` : `${it.f}: chunks ${it.s}–${it.s + it.c - 1}`;
+    const n = it.k === 'M' ? 1 : it.c;
+    return `<div class="qi ${cls}"><span>${lab}</span><span class="c">${n} pkt</span></div>`;
+  }).join('') + (q.length > 7 ? `<div class="hint">+ ${q.length - 7} more</div>` : '');
+}
+function renderGround() {
+  for (const f of Object.values(S.files)) {
+    if (!f.onGround || f.done) continue;
+    const el = $(`#gf-${f.id}`); if (!el) continue;
+    const got = f.rec.reduce((a, b) => a + b, 0);
+    el.querySelector('.pr').textContent = `${got}/${f.n}`;
+    el.querySelector('.fname').textContent = f.nameKnown ? f.name : '(name not yet received)';
+    const m = missingRanges(f); el.querySelector('.mis').textContent = m.length ? `${m.length} gap${m.length > 1 ? 's' : ''}` : (f.nameKnown ? '' : 'needs name');
+  }
+}
+function renderStats() {
+  const st = S.stats;
+  $('#stT').textContent = S.t.toFixed(1) + 's'; $('#stSent').textContent = st.sent; $('#stLost').textContent = st.lost; $('#stCrc').textContent = st.crc;
+  $('#stRe').textContent = st.re; $('#stWhole').textContent = st.whole; $('#stDone').textContent = st.done;
+  const first = st.sent - st.re; $('#stOver').textContent = first ? '+' + Math.round(st.re / first * 100) + '%' : '0%';
+  $('#sState').textContent = S.state; $('#lName').textContent = LINKS[S.link].label + (S.kbpsOverride ? ' · custom cap' : ''); $('#lRate').textContent = kbps(); $('#lLoss').textContent = Math.round(S.loss * 100) + '%';
+  $('#reconNext').textContent = `next in ${Math.max(0, RECON_PERIOD - (S.t - S.lastRecon)).toFixed(0)}s`;
+  const rc = S.recon;
+  $('#reconLast').innerHTML = !rc ? 'waiting for its first pass' : rc.none ? 'no ledger snapshot has landed yet' :
+    `<b>${rc.snap}</b><br>${rc.complete} complete · ${rc.inflight} in flight · ${rc.queued} queued · ${rc.recent} too recent` + (rc.missing ? `<br><span class="lw">${rc.missing} lost whole → ${rc.requested ? 'requested again' : 'already requested'}</span>` : ' · 0 lost whole');
+  $('#cleanerNext').textContent = `cleaner in ${Math.max(0, CLEAN_PERIOD - (S.t - S.lastClean)).toFixed(1)}s`;
+  $('#pauseSender').textContent = S.state === 'paused' ? 'Resume sender' : 'Pause sender';
+}
+const logEl = $('#log');
+function log(html, cls = '') {
+  const li = document.createElement('li'); li.className = cls; li.innerHTML = `<span class="tm">${(S ? S.t : 0).toFixed(1).padStart(5, ' ')}s</span>${html}`;
+  logEl.prepend(li); while (logEl.children.length > 80) logEl.lastChild.remove();
+}
+
+/* ---- controls */
+function setPlaying(v) { S.playing = v; const b = $('#play'); b.textContent = v ? '❚❚ Pause' : '▶ Play'; b.classList.toggle('on', v); }
+function setLink(name) { S.link = name; S.kbpsOverride = null; $$('[data-link]').forEach(b => b.classList.toggle('on', b.dataset.link === name)); log(`operator: active link is now <b>${LINKS[name].label}</b> (${LINKS[name].kbps} kbps), no restart`, 'c-cyan'); }
+function setLoss(p) { S.loss = Math.max(0, Math.min(.95, p)); $('#loss').value = Math.round(S.loss * 100); $('#lossV').textContent = Math.round(S.loss * 100) + '%'; }
+function setState(st) {
+  if (st === 'paused') { S.queue = []; log('operator: sender <b>paused</b>; its queue is cleared (the cleaner will recover the rest later)', 'c-orange'); }
+  else log('operator: sender back to <b>auto</b>', 'c-cyan');
+  S.state = st;
+}
+const SCI = ['ngc2403_0055.fits.bz2', 'm51_0233.fits.bz2', 'm82_0301.fits.bz2', 'ngc891_0147.fits.bz2', 'm33_0412.fits.bz2', 'ngc4565_0078.fits.bz2', 'abell2218_0019.fits.bz2'];
+const CAL = [['dark', 'dark_0008.fits.bz2'], ['flat', 'flat_0013.fits.bz2'], ['bias', 'bias_0004.fits.bz2'], ['dark', 'dark_0009.fits.bz2'], ['flat', 'flat_0014.fits.bz2'], ['bias', 'bias_0005.fits.bz2']];
+let sci = 0, cal = 0;
+$('#play').onclick = () => setPlaying(!S.playing);
+$('#reset').onclick = () => reset();
+$('#loss').oninput = e => { setLoss(e.target.value / 100); };
+$('#loss').onchange = e => log(`link: loss rate set to <b>${e.target.value}%</b>`, 'c-muted');
+$('#speed').oninput = e => { S.speed = SPEEDS[+e.target.value]; $('#speedV').textContent = S.speed + '×'; };
+$$('[data-link]').forEach(b => b.onclick = () => setLink(b.dataset.link));
+$('#addSci').onclick = () => addPending(SCI[sci++ % SCI.length], 36, 'science');
+$('#addCal').onclick = () => { const [fd, nm] = CAL[cal++ % CAL.length]; addPending(nm, 20, fd); };
+$('#addUrgent').onclick = () => { const f = newFile('quicklook_0001.fits.bz2', 16, 'science'); pushFull(f, true); renderFolders(); log(`operator: <b>ctl submit --interrupt</b> quicklook_0001.fits.bz2 (file ${f.id}) jumps to the front`, 'c-orange'); };
+$('#corrupt').onclick = () => { S.corruptNext = true; log('a cosmic ray will flip one bit in the next packet', 'c-red'); };
+$('#cleanNow').onclick = () => cleanerPass(true);
+function syncBlackout() {
+  const b = $('#blackout'); const on = S.outage || S.blackout !== null || S.blackoutNext;
+  b.classList.toggle('on', on); b.setAttribute('aria-pressed', S.outage ? 'true' : 'false');
+  b.textContent = S.outage ? 'End blackout' : (S.blackout !== null || S.blackoutNext) ? 'Blackout: next file' : 'Start blackout';
+}
+function setOutage(on) {
+  if (on === S.outage) return;
+  S.outage = on;
+  if (on) {
+    S.outageT0 = S.t; S.outageLost = 0; S.outageFiles = new Set();
+    log('<span class="c-orange">blackout begins</span>: the link is down and every packet is lost. The sender can\'t tell and keeps working through its queue', 'c-orange');
+  } else {
+    const secs = (S.t - S.outageT0).toFixed(1), n = S.outageFiles.size;
+    log(`<span class="c-orange">blackout ends</span> after ${secs}s: ${S.outageLost} packets lost across ${n} file${n === 1 ? '' : 's'}. Files that got at least one packet through are repaired by the cleaner; files sent entirely inside the blackout come back through reconciliation`, 'c-orange');
+  }
+  syncBlackout();
+}
+function armBlackout() { if (S.outage || S.blackout !== null || S.blackoutNext) return; S.blackoutNext = true; syncBlackout(); log('blackout armed: the next file the sender picks will lose every packet', 'c-orange'); }
+$('#blackout').onclick = () => { if (!S.outage && (S.blackout !== null || S.blackoutNext)) return; setOutage(!S.outage); };
+$('#reconNow').onclick = () => reconcilePass(true);
+$('#pauseSender').onclick = () => setState(S.state === 'paused' ? 'auto' : 'paused');
+
+/* ---- terminal */
+const tout = $('#tout');
+function tprint(s, cls) { const d = document.createElement('div'); if (cls) d.className = cls; d.innerHTML = s; tout.append(d); tout.scrollTop = tout.scrollHeight; }
+const HELP = [
+  ['ctl status', 'what the sender is doing'],
+  ['ctl set-link --link hg-fastest', 'TDRSS High Gain, 1000 kbps'],
+  ['ctl set-link --link hg-fast', 'TDRSS High Gain, 500 kbps'],
+  ['ctl set-link --link hg-slow', 'TDRSS High Gain, 100 kbps'],
+  ['ctl set-link --kbps N', 'custom speed cap'],
+  ['ctl set-state paused|auto', 'pause (clears queue) / resume'],
+  ['ctl submit --path NAME', 'send a file (add --interrupt)'],
+  ['ctl cleaner-run', 'run a cleaner pass now'],
+  ['ctl reconcile-run', 'reconcile ledger vs downloads now'],
+  ['blackout [on|off]', 'take the link down / bring it back'],
+  ['blackout next', 'lose every packet of the next file'],
+  ['ctl flush', 'drop everything queued'],
+  ['loss N', 'set link loss to N%'],
+  ['clear', 'clear this terminal'],
+].map(([c, d]) => `<span class="c-cyan">${c}</span>${' '.repeat(Math.max(2, 33 - c.length))}${d}`).join('\n');
+function run(cmdline) {
+  const a = cmdline.trim().split(/\s+/).filter(Boolean); if (!a.length) return;
+  tprint(`<span class="c-orange">$</span> <span style="color:var(--text)">${cmdline.replace(/</g, '&lt;')}</span>`);
+  const arg = (k) => { const i = a.indexOf(k); return i >= 0 ? a[i + 1] : undefined; };
+  if (a[0] === 'help') return tprint(HELP);
+  if (a[0] === 'clear') { tout.innerHTML = ''; return; }
+  if (a[0] === 'loss') { const v = parseFloat(a[1]); if (isNaN(v)) return tprint('usage: loss N', 'c-red'); setLoss(v / 100); log(`link: loss rate set to <b>${Math.round(S.loss * 100)}%</b>`, 'c-muted'); return tprint(`loss is now ${Math.round(S.loss * 100)}%`); }
+  if (a[0] === 'blackout') {
+    if (a[1] === 'next') { armBlackout(); return tprint('blackout armed for the next file'); }
+    const want = a[1] === 'on' ? true : a[1] === 'off' ? false : !S.outage;
+    setOutage(want); return tprint(S.outage ? 'link is down: every packet is lost until you run blackout off' : 'link is back up');
+  }
+  if (a[0] === 'parachuter') a.shift();
+  if (a[0] !== 'ctl') return tprint(`unknown command: ${a[0].replace(/</g, '&lt;')} (try help)`, 'c-red');
+  const sub = a[1];
+  if (sub === 'status' || sub === 'ping') {
+    const pend = {}; S.queue.forEach(q => { pend[q.f] = pend[q.f] || []; pend[q.f].push(q.k === 'M' ? 'name' : `${q.s}+${q.c}`); });
+    return tprint(JSON.stringify({ kind: 'sender_status', state: S.state, active_link: S.link, max_kbps: kbps(), chunk_size: CHUNK_B, queue_depth: S.queue.reduce((n, q) => n + (q.k === 'M' ? 1 : q.c), 0), pending: pend }, null, 2));
+  }
+  if (sub === 'set-link') {
+    const l = arg('--link'), k = arg('--kbps');
+    if (l) { if (!LINKS[l]) return tprint(`{"kind":"bad_request","reason":"unknown link \`${l}\`"}`, 'c-red'); setLink(l); }
+    if (k) { const v = parseInt(k, 10); if (!(v > 0)) return tprint('bad --kbps', 'c-red'); S.kbpsOverride = v; log(`operator: speed cap set to <b>${v} kbps</b>`, 'c-cyan'); }
+    if (!l && !k) return tprint('usage: ctl set-link --link NAME | --kbps N', 'c-red');
+    return tprint('{"kind":"ok"}');
+  }
+  if (sub === 'set-state') { const st = a[2]; if (!['paused', 'auto'].includes(st)) return tprint('usage: ctl set-state paused|auto', 'c-red'); setState(st); return tprint('{"kind":"ok"}'); }
+  if (sub === 'submit') {
+    const p = arg('--path') || 'submitted_0001.fits.bz2'; const name = p.split('/').pop(); const f = newFile(name, 48, 'science'); const intr = a.includes('--interrupt');
+    pushFull(f, intr); renderFolders(); log(`operator: submit ${name} (file ${f.id})${intr ? ' <b>--interrupt</b>: to the front' : ': to the back of the queue'}`, 'c-cyan');
+    return tprint(JSON.stringify({ kind: 'submitted', file_id: f.id, num_chunks: f.n, file_size: f.n * (CHUNK_B - 32) }));
+  }
+  if (sub === 'cleaner-run') { cleanerPass(true); return tprint('{"kind":"ok"}'); }
+  if (sub === 'reconcile-run') { reconcilePass(true); return tprint('{"kind":"ok"}'); }
+  if (sub === 'flush') { S.queue = []; log('operator: queue flushed', 'c-orange'); return tprint('{"kind":"ok"}'); }
+  tprint(`unknown ctl command: ${String(sub).replace(/</g, '&lt;')} (try help)`, 'c-red');
+}
+$('#tform').onsubmit = e => { e.preventDefault(); const v = $('#tin').value; $('#tin').value = ''; run(v); };
+
+/* ---- lifecycle */
+function reset() {
+  S = freshState(); sci = 0; cal = 0; syncBlackout();
+  $('#gfiles').innerHTML = ''; logEl.innerHTML = '';
+  $$('[data-link]').forEach(b => b.classList.toggle('on', b.dataset.link === S.link));
+  [['dark', 'dark_0007.fits.bz2', 20], ['flat', 'flat_0012.fits.bz2', 24], ['bias', 'bias_0003.fits.bz2', 16],
+   ['science', 'm31_0142.fits.bz2', 40], ['science', 'ngc6946_0217.fits.bz2', 36], ['science', 'abell1689_0031.fits.bz2', 44],
+   ['science', 'm101_0412.fits.bz2', 32], ['science', 'coma_0098.fits.bz2', 40]].forEach(([fd, nm, n]) => addPending(nm, n, fd));
+  renderLanded(); renderFolders();
+  log(`simulation started: sender in <b>auto</b>, link <b>${LINKS[S.link].label}</b>`, 'c-muted');
+}
+let lastT = performance.now(), uiT = 0, visible = true;
+new IntersectionObserver(es => { visible = es[0].isIntersecting; }, { threshold: 0 }).observe($('#sim'));
+function loop(t) {
+  const real = Math.min(.1, (t - lastT) / 1000); lastT = t;
+  if (S.playing && visible) {
+    let dt = real * S.speed; while (dt > 0) { const d = Math.min(dt, .02); step(d); dt -= d; }
+  }
+  drawLane();
+  uiT += real; if (uiT > .1) { uiT = 0; renderQueue(); renderGround(); renderStats(); }
+  requestAnimationFrame(loop);
+}
+reset(); setLoss(.1); setPlaying(true); sizeLane(); requestAnimationFrame(loop);
+
+/* ================================================================== PACKET ANATOMY */
+const FIELDS = [
+  { k: 'magic', r: [0, 3], g: 'id', name: 'Magic', short: 'Magic', t: 'magic · "PARC"',
+    what: 'Four fixed ASCII letters, <code>50 41 52 43</code>, that open every packet.',
+    set: 'A constant (<code>MAGIC</code>) in the crate. <code>Packet::encode</code> writes it into every datagram; nobody configures it.',
+    diff: 'Never, for a genuine parachuter packet. Anything else arriving on the port, like a network scan, another program, other traffic on a shared multicast group, or a first byte damaged in transit, fails here and is dropped before any other field is read. The manifest file on the ground uses its own magic, <code>PMAN</code>, so the two can never be confused.',
+    why: 'Foreign bytes are rejected at the very first check, before they can be mistaken for a file ID and written into a real file.' },
+  { k: 'version', r: [4, 4], g: 'id', name: 'Version', short: 'Ver', t: 'version',
+    what: 'The header layout version. Currently <code>1</code>.',
+    set: 'A compile-time constant (<code>PROTOCOL_VERSION = 1</code>) baked into whichever parachuter release is running. It is not in the config file and <code>ctl</code> cannot change it.',
+    diff: 'Only when a release changes the header layout: a field added, widened (say, a 64-bit chunk_id) or moved. That release would stamp <b>2</b>. Flight software is frozen at launch while the ground keeps updating, so the two ends can end up on different releases. Today\'s receiver accepts exactly 1 and drops anything else as <code>unsupported version</code>, so a mismatch fails loudly instead of misreading every field. A later ground release could decode 1 and 2 side by side. Changing chunk size, link or rate never needs a new version, and neither does a new packet type, since old receivers drop unknown types safely.',
+    why: 'It lets old and new software disagree safely, and gives the protocol a clean upgrade path.' },
+  { k: 'type', r: [5, 5], g: 'id', name: 'Type', short: 'Type', t: 'type',
+    what: 'What the payload means: <b>1</b> Data, <b>2</b> Manifest (the filename), <b>3</b> Retransmit, <b>4</b> NameOnly, <b>5</b> Heartbeat.',
+    set: 'By the sender, per queue item. A file\'s first pass sends a Manifest, then Data for every chunk. Anything the cleaner asks for goes out as Retransmit, and a re-requested filename as another Manifest.',
+    diff: 'NameOnly and Heartbeat are understood by the receiver, but today\'s sender never emits them. Any value outside 1–5 is dropped as <code>unknown packet type</code>, which leaves room to add new types later without a version bump.',
+    why: 'The receiver takes the right path (write bytes, record a name, or ignore) with no guessing from other fields.' },
+  { k: 'flags', r: [6, 7], g: 'id', name: 'Flags', short: 'Flags', t: 'flags',
+    what: 'Sixteen on/off bits. Three are defined: bit 0 <b>LAST_CHUNK</b>, bit 1 <b>COMPRESSED</b>, bit 2 <b>RETRANSMIT_HINT</b>.',
+    set: 'The chunker sets LAST_CHUNK on a file\'s final chunk and RETRANSMIT_HINT on every retransmit. COMPRESSED is defined but the sender does not set it today, even for <code>.fits.bz2</code> files; the filename already says so.',
+    diff: 'Typical values: <code>0x0000</code> ordinary chunk · <code>0x0001</code> last chunk · <code>0x0004</code> retransmit · <code>0x0005</code> retransmitted last chunk. Bits 3–15 are unused and free for future hints.',
+    why: 'LAST_CHUNK tells the ground where the file ends, so it is trimmed to its exact size.' },
+  { k: 'file_id', r: [8, 15], g: 'loc', name: 'file_id', short: 'file_id', t: 'file_id · i64',
+    what: 'Which file this piece belongs to. A signed 64-bit integer.',
+    set: 'The row id from the sender\'s SQLite ledger, created the first time the sender sees a file path, whether by folder scan or <code>ctl submit</code>.',
+    diff: 'Unique per file within one ledger. Submitting the same path again reuses its id; a fresh ledger (a new database) starts counting from 1 again.',
+    why: 'Many files can be in flight at once without mixing, and it is the number the cleaner quotes: "file 117, chunks 21–22".' },
+  { k: 'chunk_id', r: [16, 19], g: 'loc', name: 'chunk_id', short: 'chunk', t: 'chunk_id · u32',
+    what: 'Which piece this is, counting from 0.',
+    set: 'From the sender\'s queue. A first pass counts 0, 1, 2 … N−1; a retransmit carries exactly the chunk the cleaner asked for. Manifest packets carry 0, which is ignored.',
+    diff: 'Different on every data packet of a file. Four bytes allow about 4.3 billion chunks per file.',
+    why: 'The receiver writes the payload at chunk_id × chunk size and sets that chunk\'s bit, so arrival order never matters.' },
+  { k: 'num_chunks', r: [20, 23], g: 'loc', name: 'num_chunks', short: 'count', t: 'num_chunks · u32',
+    what: 'How many pieces the whole file has.',
+    set: 'Computed by the sender: file size ÷ (chunk size − 32), rounded up, with a minimum of 1 so an empty file still gets a final chunk. Identical on every packet of the file, manifest included.',
+    diff: 'It depends on chunk size, so <code>ctl set-link --chunk-size</code> changes it for anything chunked afterwards. If it changes mid-file, packets no longer match the ground\'s manifest and are rejected instead of scrambling the file.',
+    why: 'The ground can size the bitmap from whichever packet arrives first, even if the filename packet was lost.' },
+  { k: 'payload_len', r: [24, 27], g: 'ver', name: 'payload_len', short: 'len', t: 'payload_len · u32',
+    what: 'How many payload bytes follow the header.',
+    set: 'Written by the encoder from the actual payload: chunk size − 32 for a full chunk (16,160 by default), fewer bytes for the last chunk, the filename\'s length for a Manifest.',
+    diff: 'It varies with the kind of packet, but must always equal the datagram length minus 32.',
+    why: 'A datagram cut short or padded out is caught before anything else is trusted.' },
+  { k: 'crc32', r: [28, 31], g: 'ver', name: 'crc32', short: 'crc', t: 'crc32 · u32',
+    what: 'A CRC-32 checksum over the whole datagram, header and payload, computed with this field set to zero.',
+    set: 'Computed last by the encoder, after every other byte is in place. The receiver zeroes the field, recomputes, and compares.',
+    diff: 'Different on almost every packet, since it depends on every byte. Change one bit anywhere and the stored and recomputed values disagree: the packet is dropped and later re-requested. It catches every single-bit error and every burst up to 32 bits; heavier random damage slips through about 1 time in 4.3 billion. It detects accidents, not attacks.',
+    why: 'A damaged packet is treated exactly like a lost one, and the retransmit loop does the recovery.' },
+  { k: 'payload', r: [32, 63], g: 'pl', name: 'payload', short: 'payload', t: 'payload',
+    what: 'The file bytes for this chunk: here, bzip2-compressed FITS data. In a Manifest packet it is the filename instead.',
+    set: 'Read straight from the file on disk at chunk_id × (chunk size − 32). Up to 16,160 bytes with default 16,192-byte packets; 32 are shown here.',
+    diff: 'Every chunk carries different bytes; the last chunk is usually shorter.',
+    why: 'The 32-byte header costs about 0.2% of a default packet.' },
+];
+function buildPacket() {
+  const pl = new Uint8Array(32); let z = 0x9E3779B9; for (let i = 0; i < 32; i++) { z ^= z << 13; z ^= z >>> 17; z ^= z << 5; pl[i] = z & 0xFF; }
+  const b = new Uint8Array(32 + pl.length); const v = new DataView(b.buffer);
+  b.set([0x50, 0x41, 0x52, 0x43], 0); b[4] = 1; b[5] = 1; v.setUint16(6, 0, true);
+  v.setBigInt64(8, 117n, true); v.setUint32(16, 21, true); v.setUint32(20, 775, true); v.setUint32(24, pl.length, true); v.setUint32(28, 0, true);
+  b.set(pl, 32); v.setUint32(28, crc32(b), true); return b;
+}
+const ORIG = buildPacket(); let PKT = ORIG.slice(); let selByte = 21; let hoverField = null;
+const fieldOf = i => FIELDS.find(f => i >= f.r[0] && i <= f.r[1]);
+function buildSubLabels() {
+  const el = $('#subl');
+  FIELDS.filter(f => f.g !== 'pl').forEach(f => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'sl ' + f.g + (f.k === 'version' ? ' end' : f.k === 'type' ? ' start' : ''); b.dataset.k = f.k;
+    b.style.gridColumn = `span ${f.r[1] - f.r[0] + 1}`;
+    b.innerHTML = `<span class="full">${f.name}</span><span class="short">${f.short}</span>`;
+    b.setAttribute('aria-label', `${f.name}, bytes ${f.r[0]} to ${f.r[1]}`);
+    b.onmouseenter = () => { hoverField = f; paintAnat(); }; b.onmouseleave = () => { hoverField = null; paintAnat(); };
+    b.onclick = () => { selByte = f.r[0]; paintAnat(); };
+    el.append(b);
+  });
+}
+function buildGroups() {
+  const G = [
+    { g: 'id', label: 'Identify', q: 'Is this ours, and how do I read it?', r: 'bytes 0–7', c: '#C9D1E0' },
+    { g: 'loc', label: 'Locate', q: 'Where does this piece belong?', r: 'bytes 8–23', c: 'var(--cyan)' },
+    { g: 'ver', label: 'Verify', q: 'Is it intact?', r: 'bytes 24–31', c: 'var(--orange)' },
+  ];
+  $('#groups').innerHTML = G.map(gr => `<div class="grp"><div class="grp-h" style="border-color:${gr.c}"><div class="gl" style="color:${gr.c}"><span>${gr.label}</span><span>${gr.r}</span></div><div class="gq">${gr.q}</div></div>` +
+    FIELDS.filter(f => f.g === gr.g).map(f => `<button type="button" class="fsub" data-k="${f.k}"><div class="fh"><b style="color:${gr.c}">${f.name}</b><span>${f.r[1] > f.r[0] ? 'bytes ' + f.r[0] + '–' + f.r[1] : 'byte ' + f.r[0]}</span></div>
+      <div class="fw">${f.what}</div><dl><dt>How it's set</dt><dd>${f.set}</dd><dt>How it can differ</dt><dd>${f.diff}</dd><dt>Why it matters</dt><dd>${f.why}</dd></dl></button>`).join('') + '</div>').join('');
+  $$('#groups .fsub').forEach(b => {
+    const f = FIELDS.find(x => x.k === b.dataset.k);
+    b.onclick = () => { selByte = f.r[0]; paintAnat(); $('#hdrBytes').scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' }); };
+  });
+}
+function buildBytes() {
+  const mk = (i) => { const f = fieldOf(i); const b = document.createElement('button'); b.type = 'button'; b.className = 'by ' + f.g; b.dataset.i = i; b.setAttribute('aria-label', `byte ${i}, ${f.k}`); b.innerHTML = `<b></b><small>${i}</small>`;
+    b.onmouseenter = () => { hoverField = f; paintAnat(); }; b.onfocus = b.onmouseenter; b.onmouseleave = () => { hoverField = null; paintAnat(); };
+    b.onclick = () => { selByte = i; paintAnat(); }; return b; };
+  for (let i = 0; i < 32; i++) $('#hdrBytes').append(mk(i));
+  for (let i = 32; i < 64; i++) $('#plBytes').append(mk(i));
+}
+function decode(b) {
+  const v = new DataView(b.buffer, b.byteOffset, b.byteLength);
+  const r = { checks: [] }; let ok = true;
+  const add = (name, pass, val, reason) => { if (!ok) { r.checks.push({ name, st: 'skip', val }); return; } r.checks.push({ name, st: pass ? 'ok' : 'bad', val }); if (!pass) { ok = false; r.reason = reason; } };
+  const magic = String.fromCharCode(...b.slice(0, 4));
+  add('Magic is "PARC"', magic === 'PARC', JSON.stringify(magic), 'bad magic: not one of ours');
+  add('Version is 1', b[4] === 1, 'v' + b[4], 'unsupported version');
+  const types = { 1: 'Data', 2: 'Manifest', 3: 'Retransmit', 4: 'NameOnly', 5: 'Heartbeat' };
+  add('Type is known', !!types[b[5]], types[b[5]] || b[5], 'unknown packet type');
+  const plen = v.getUint32(24, true);
+  add('Length = 32 + payload_len', b.length === 32 + plen, `${b.length} vs ${32 + plen}`, 'payload length mismatch');
+  const stored = v.getUint32(28, true); const tmp = b.slice(); tmp.fill(0, 28, 32); const calc = crc32(tmp);
+  add('CRC-32 matches', stored === calc, `${stored.toString(16).toUpperCase().padStart(8, '0')} vs ${calc.toString(16).toUpperCase().padStart(8, '0')}`, 'crc mismatch');
+  r.ok = ok; r.type = types[b[5]]; r.flags = v.getUint16(6, true); r.fid = v.getBigInt64(8, true); r.ch = v.getUint32(16, true); r.n = v.getUint32(20, true); r.plen = plen; r.stored = stored; r.calc = calc;
+  return r;
+}
+function paintAnat() {
+  const d = decode(PKT); const tmp = PKT.slice(); tmp.fill(0, 28, 32);
+  $$('.by').forEach(el => { const i = +el.dataset.i; const f = fieldOf(i);
+    el.querySelector('b').textContent = hex2(PKT[i]);
+    el.classList.toggle('hl', !!hoverField && hoverField === f);
+    el.classList.toggle('sel', i === selByte);
+    el.classList.toggle('dirty', PKT[i] !== ORIG[i]);
+  });
+  const f = hoverField || fieldOf(selByte);
+  $$('.sl').forEach(el => el.classList.toggle('act', el.dataset.k === f.k));
+  $$('.fsub').forEach(el => el.classList.toggle('act', el.dataset.k === f.k));
+  const bits = [...Array(8)].map((_, k) => { const on = (PKT[selByte] >> (7 - k)) & 1; return `<button type="button" class="bit ${on ? 'one' : ''}" data-b="${7 - k}" aria-label="bit ${7 - k} of byte ${selByte}">${on}<small>b${7 - k}</small></button>`; }).join('');
+  const ch = PKT[selByte] >= 32 && PKT[selByte] < 127 ? ` · "${String.fromCharCode(PKT[selByte])}"` : '';
+  $('#finfo').innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><span class="fn" style="color:${f.g === 'loc' ? 'var(--cyan)' : f.g === 'ver' ? 'var(--orange)' : 'var(--text)'}">${f.t}</span><span class="fb">${f.r[1] > f.r[0] ? 'bytes ' + f.r[0] + '–' + f.r[1] : 'byte ' + f.r[0]}</span></div>
+    <p style="color:var(--text)">${f.what}</p><p><b>How it's set.</b> ${f.set}</p><p><b>Why it matters.</b> ${f.why}</p>
+    <div class="lbl" style="margin-top:18px;text-transform:none">Selected byte ${selByte} = 0x${hex2(PKT[selByte])}${ch} · click a bit to flip it</div><div class="bitrow">${bits}</div>
+    <div class="decoded"><span>type</span><span>${d.type || '?'}</span><span>file_id</span><span>${d.fid}</span><span>chunk_id</span><span>${d.ch} of ${d.n}</span><span>payload_len</span><span>${d.plen} bytes</span><span>crc32 stored</span><span>0x${d.stored.toString(16).toUpperCase().padStart(8, '0')}</span><span>crc32 computed</span><span class="${d.stored === d.calc ? 'c-cyan' : 'c-orange'}">0x${d.calc.toString(16).toUpperCase().padStart(8, '0')}</span></div>`;
+  $$('#finfo .bit').forEach(b => b.onclick = () => { PKT[selByte] ^= (1 << +b.dataset.b); paintAnat(); });
+  $('#checks').innerHTML = d.checks.map(c => `<div class="ck ${c.st}"><span class="i">${c.st === 'ok' ? '✓' : c.st === 'bad' ? '✕' : '·'}</span><span>${c.name}</span><span class="v">${c.st === 'skip' ? 'not checked' : c.val}</span></div>`).join('');
+  const v = $('#verdict');
+  if (d.ok) { v.className = 'verdict ok'; v.innerHTML = `<b>Accepted.</b> Write ${d.plen} bytes at chunk ${d.ch} × chunk size, then set bit ${d.ch} in file ${d.fid}'s manifest.`; }
+  else { v.className = 'verdict bad'; v.innerHTML = `<b>Dropped: ${d.reason}.</b> Nothing touches the disk. Chunk ${ORIG_CH} of file 117 stays a gap, and the cleaner will ask for it again.`; }
+}
+const ORIG_CH = 21;
+buildSubLabels(); buildBytes(); buildGroups(); paintAnat();
+$('#randFlip').onclick = () => { const i = Math.floor(Math.random() * PKT.length), k = Math.floor(Math.random() * 8); PKT[i] ^= 1 << k; selByte = i; paintAnat(); };
+$('#pktReset').onclick = () => { PKT = ORIG.slice(); paintAnat(); };
+
+/* ================================================================== MANIFEST */
+const MN = 20, M_PAY = 16160, M_LAST = 8960, M_NAME = 'm31_0142.fits.bz2';
+let mrec = new Uint8Array(MN).fill(1); [2, 9, 10, 17].forEach(i => mrec[i] = 0); let prevBytes = null;
+function mBytes() {
+  const name = new TextEncoder().encode($('#nameIn').checked ? M_NAME : '');
+  const bmLen = Math.ceil(MN / 8); const b = new Uint8Array(32 + name.length + bmLen); const v = new DataView(b.buffer);
+  b.set([0x50, 0x4D, 0x41, 0x4E], 0); b[4] = 1;
+  v.setUint32(8, M_PAY, true); v.setUint32(12, MN, true);
+  v.setBigUint64(16, BigInt(mrec[MN - 1] ? (MN - 1) * M_PAY + M_LAST : 0), true);
+  v.setUint32(24, name.length, true); v.setUint32(28, crc32(b.slice(0, 32)), true);
+  b.set(name, 32); for (let i = 0; i < MN; i++) if (mrec[i]) b[32 + name.length + (i >> 3)] |= 1 << (i & 7);
+  return { b, nl: name.length };
+}
+function mKind(i, nl) { if (i < 5) return ''; if (i < 8) return 'res'; if (i < 28) return 'sz'; if (i < 32) return 'crc'; if (i < 32 + nl) return 'nm'; return 'bm'; }
+function paintManifest() {
+  $('#chunks').innerHTML = [...mrec].map((on, i) => `<button type="button" class="chk ${on ? 'on' : ''}" data-i="${i}" aria-pressed="${!!on}">${i}<small>${on ? 'on disk' : 'missing'}</small></button>`).join('');
+  $$('#chunks .chk').forEach(b => b.onclick = () => { mrec[+b.dataset.i] ^= 1; paintManifest(); });
+  const { b, nl } = mBytes(); let rows = '';
+  for (let r = 0; r < b.length; r += 16) {
+    let cells = ''; for (let i = r; i < r + 16; i++) cells += i < b.length ? `<span class="hb ${mKind(i, nl)} ${prevBytes && prevBytes[i] !== b[i] ? 'pulse' : ''}" title="byte ${i}">${hex2(b[i])}</span>` : '<span></span>';
+    const asc = [...b.slice(r, r + 16)].map(x => x >= 32 && x < 127 ? String.fromCharCode(x) : '·').join('');
+    rows += `<div class="hexrow"><span class="o">${r.toString(16).padStart(4, '0')}</span>${cells}<span class="a">${asc.replace(/</g, '&lt;')}</span></div>`;
+  }
+  $('#hex').innerHTML = rows; prevBytes = b;
+  const v = new DataView(b.buffer); const bm = [...b.slice(32 + nl)].map(hex2).join(' ');
+  $('#mdec').innerHTML = `<span>magic · version</span><span>"PMAN" · 1</span><span>chunk_payload</span><span>${M_PAY.toLocaleString()} B</span><span>num_chunks</span><span>${MN}</span><span>file_size</span><span>${Number(v.getBigUint64(16, true)) ? Number(v.getBigUint64(16, true)).toLocaleString() + ' B' : '0 (last chunk not in yet)'}</span><span>filename</span><span>${nl ? M_NAME : '(empty: not received)'}</span><span>header_crc</span><span class="c-orange">0x${v.getUint32(28, true).toString(16).toUpperCase().padStart(8, '0')}</span><span>bitmap</span><span>${bm}</span>`;
+  const miss = []; let i = 0; while (i < MN) { if (!mrec[i]) { const s = i; while (i < MN && !mrec[i]) i++; miss.push(i - s > 1 ? `${s}–${i - 1}` : `${s}`); } else i++; }
+  const ms = $('#mstat'); const named = $('#nameIn').checked;
+  if (!miss.length && named) { ms.className = 'mstat done'; ms.innerHTML = `<b>Complete.</b> Every bit is set and the name is known: <code>117.incoming</code> is renamed to <code>downloads/m31_0142.fits.bz2</code> and the manifest is deleted.`; }
+  else { ms.className = 'mstat'; ms.innerHTML = `The cleaner would ask the sender for: <b>${[...(named ? [] : ['the filename']), ...miss.map(m => 'chunk' + (m.includes('–') ? 's ' : ' ') + m)].join(', ')}</b>`; }
+}
+$('#nameIn').onchange = paintManifest;
+$('#mAll').onclick = () => { mrec.fill(1); $('#nameIn').checked = true; paintManifest(); };
+$('#mNone').onclick = () => { mrec.fill(0); paintManifest(); };
+$('#mRand').onclick = () => { for (let i = 0; i < MN; i++) mrec[i] = Math.random() < .2 ? 0 : 1; paintManifest(); };
+paintManifest();
+
+/* ================================================================== CONVERGENCE */
+function paintConv() {
+  const p = $('#cp').value / 100, N = Math.round(10 ** +$('#cn').value);
+  $('#cpV').textContent = Math.round(p * 100) + '%'; $('#cnV').textContent = N.toLocaleString();
+  const vals = []; let m = N; for (let k = 1; k <= 30 && m >= .5; k++) { m = N * p ** k; vals.push(m); }
+  $('#cPasses').textContent = vals.length + 1; $('#cOver').textContent = '+' + Math.round(p / (1 - p) * 100) + '%'; $('#cFirst').textContent = Math.round(N * p).toLocaleString();
+  const svg = $('#convChart'); const W = svg.clientWidth || 700, H = 320, pl = 56, pb = 40, pt = 20, pr = 16;
+  const max = Math.max(1, vals[0] || 1); const n = Math.max(1, vals.length); const bw = Math.min(70, (W - pl - pr) / n - 10);
+  let g = `<text x="${pl}" y="14" fill="#8793AB" font-family="IBM Plex Mono" font-size="12">chunks still missing after each pass</text>`;
+  [0, .5, 1].forEach(f => { const y = pt + (H - pt - pb) * (1 - f); g += `<line x1="${pl}" x2="${W - pr}" y1="${y}" y2="${y}" stroke="#26314A"/><text x="${pl - 8}" y="${y + 4}" text-anchor="end" fill="#8793AB" font-family="IBM Plex Mono" font-size="11">${Math.round(max * f).toLocaleString()}</text>`; });
+  vals.forEach((v, i) => { const x = pl + 10 + i * ((W - pl - pr) / n); const h = (H - pt - pb) * v / max; const y = H - pb - h;
+    g += `<rect x="${x}" y="${y}" width="${bw}" height="${Math.max(h, 1)}" rx="3" fill="#FF8A3D"/><text x="${x + bw / 2}" y="${Math.max(y - 6, pt + 10)}" text-anchor="middle" fill="#EEF1F7" font-family="IBM Plex Mono" font-size="11">${v >= 10 ? Math.round(v).toLocaleString() : v.toFixed(1)}</text><text x="${x + bw / 2}" y="${H - pb + 18}" text-anchor="middle" fill="#8793AB" font-family="IBM Plex Mono" font-size="11">pass ${i + 1}</text>`; });
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.innerHTML = g;
+}
+$('#cp').oninput = paintConv; $('#cn').oninput = paintConv; addEventListener('resize', paintConv); paintConv();
+
+$('#tryLost').onclick = () => {
+  $('#sim').scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+  if (S.speed < 2) { S.speed = 2; $('#speed').value = 2; $('#speedV').textContent = '2×'; }
+  setPlaying(true); armBlackout();
+  log('tip: watch the RECONCILER card on the ground; the lost file comes back once the next ledger snapshot lands', 'c-lav');
+};
+})();
+</script>
+</body>
+</html>
